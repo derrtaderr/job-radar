@@ -82,6 +82,57 @@ def test_run_suppresses_companies_named_in_the_tracker(tmp_path):
     assert "Harborlight Data" not in text   # closed inside the window
 
 
+# --- a tracker that was configured but isn't there --------------------------
+
+def test_run_warns_loudly_when_the_configured_tracker_is_missing(tmp_path, capsys):
+    # One typo in settings.yaml would otherwise cost every run its suppression
+    # in total silence — the exact failure the closed-window rule exists for.
+    # The run continues (a missing tracker must not kill the radar) but says so.
+    cfg_dir = _config(tmp_path, tracker="./tracker.md")
+    assert main(["--config", str(cfg_dir)],
+                scrape_fn=lambda cfg: _rows("Cobalt Grid")) == 0
+
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert str(tmp_path / "tracker.md") in out   # names the path it looked at
+    assert "suppress" in out.lower()
+    # and the run still produced its queue
+    assert (next((tmp_path / "radar-out").iterdir()) / "queue.md").exists()
+
+
+def test_run_says_nothing_about_a_tracker_that_was_never_configured(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    assert main(["--config", str(cfg_dir)],
+                scrape_fn=lambda cfg: _rows("Cobalt Grid")) == 0
+    assert "tracker" not in capsys.readouterr().out.lower()
+
+
+def test_run_does_not_warn_when_the_tracker_is_present(tmp_path, capsys):
+    (tmp_path / "tracker.md").write_text(
+        "## Active\n\n| Company | Role |\n|---|---|\n| Quarry Systems | Data Engineer |\n")
+    cfg_dir = _config(tmp_path, tracker="./tracker.md")
+    assert main(["--config", str(cfg_dir)],
+                scrape_fn=lambda cfg: _rows("Cobalt Grid")) == 0
+    assert "WARNING" not in capsys.readouterr().out
+
+
+def test_check_distinguishes_a_missing_tracker_from_an_unconfigured_one(tmp_path, capsys):
+    # "You never set it" and "you set it and it isn't there" need different
+    # fixes, so they need different sentences.
+    configured = _config(tmp_path / "a", tracker="./tracker.md")
+    assert main(["--config", str(configured), "--check"],
+                fetch_fn=lambda url: (200, "")) != 0
+    missing_msg = capsys.readouterr().out
+    assert str(tmp_path / "a" / "tracker.md") in missing_msg
+
+    unset = _config(tmp_path / "b")
+    assert main(["--config", str(unset), "--check"],
+                fetch_fn=lambda url: (200, "")) != 0
+    unset_msg = capsys.readouterr().out
+    assert "set `tracker:`" in unset_msg
+    assert missing_msg != unset_msg
+
+
 # --- a broken scrape --------------------------------------------------------
 
 def test_zero_rows_is_loud_and_leaves_state_alone(tmp_path, capsys):
