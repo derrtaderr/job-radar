@@ -1,0 +1,5 @@
+output_dir: ./radar-out         # day folders land here (queue.md + jd/)
+state_file: ./config/state.json # seen-job memory; keep it inside gitignored config/
+tracker: null                   # or a path to a markdown tracker (see README)
+tracker_active_sections: [active, drafted but not applied]
+closed_window_days: 90

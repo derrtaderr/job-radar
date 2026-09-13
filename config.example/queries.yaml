@@ -1,0 +1,11 @@
+# What to search for, where, how fresh.
+searches:
+  - "Data Engineer"
+  - "Analytics Engineer"
+  - "Data Platform Engineer"
+sites: [linkedin]
+location: "United States"
+results_per_query: 25
+hours_old: 336          # 14 days — apply early; recency is the edge
+title_keep: '\bData\b|\bAnalytics\b|\bPlatform\b|\bPipeline\b'
+title_drop: 'Intern(?:ship)?\b|Manager\b|Director\b|\bVP\b'
