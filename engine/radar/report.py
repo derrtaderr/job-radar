@@ -130,6 +130,9 @@ def _render_body(survivors, killed) -> str:
     """The survivors table plus the killed list, without frontmatter. Shared by
     a fresh write and a same-day append so both paths render identically."""
     lines = [
+        # Leading blank line: markdown needs one before a table, or the
+        # paragraph above swallows it and the queue renders as a wall of pipes.
+        "",
         "| Score | Role | Company | Comp | Posted | Where | JD | Link |",
         "|---|---|---|---|---|---|---|---|",
     ]
