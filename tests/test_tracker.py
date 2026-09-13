@@ -149,8 +149,10 @@ def test_tracker_suppresses_is_case_insensitive():
 
 
 def test_tracker_suppresses_ignores_short_cells():
-    # A two-character tracker cell must not cause degenerate substring matches.
+    # A short tracker cell must not cause degenerate substring matches. The
+    # floor is four characters, so a three-character prefix still must not hit.
     assert not tracker_suppresses("Meridian Rows", {"me"})
+    assert not tracker_suppresses("Cobalt Grid", {"cob"})
 
 
 def test_tracker_suppresses_rejects_unrelated_and_empty_names():
