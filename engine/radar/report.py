@@ -8,6 +8,9 @@ the pipeline decided so the decision can be checked in seconds.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 
 def _esc(s) -> str:
     """Escape '|' so a title, company, or location containing a pipe can't
@@ -48,26 +51,76 @@ def _comp(row: dict) -> str:
     return "unlisted"
 
 
+def _jd_filename(jid) -> str:
+    """The filename a row's JD is stored under. `jid` falls back to the job URL
+    when a row has no id, so slashes and colons have to be sanitized before they
+    reach the filesystem. Shared by write_jds and the renderers, so the link and
+    the file can never disagree."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", str(jid)) + ".md"
+
+
+def _jd_link(r: dict) -> str:
+    """Relative link to the row's local JD file, or '' when none was written.
+    No description means no file, and a dead link is worse than no link."""
+    if r.get("description") and r.get("jid"):
+        return f"[jd](jd/{_jd_filename(r['jid'])})"
+    return ""
+
+
+def write_jds(jd_dir, survivors, killed, day) -> int:
+    """Persist the full JD text the scrape already fetched — survivors AND
+    kills. Reviewing the queue then reads local files instead of re-fetching
+    postings, and checking a suspected false kill costs nothing. Returns the
+    number of files written.
+    """
+    jd_dir = Path(jd_dir)
+    written = 0
+    for r in list(survivors) + list(killed):
+        desc = r.get("description")
+        if not desc or not r.get("jid"):
+            continue
+        jd_dir.mkdir(parents=True, exist_ok=True)
+        killed_line = ""
+        if r.get("flags"):
+            evidence = "; ".join(f'**{n}**: "{ev}"' for n, ev in r["flags"])
+            killed_line = f"\nKilled by: {evidence}\n"
+        (jd_dir / _jd_filename(r["jid"])).write_text(
+            "---\n"
+            f"name: JD {r['jid']} — {r.get('company') or ''} — {r.get('title') or ''}\n"
+            f"captured: {day}\n"
+            f"source: {r.get('job_url') or ''}\n"
+            "---\n\n"
+            f"# {r.get('title') or ''} @ {r.get('company') or ''}\n\n"
+            f"{_comp(r)} | posted {r.get('date_posted') or '?'} "
+            f"| {r.get('location') or 'location unlisted'}\n"
+            f"{killed_line}\n"
+            f"{desc}\n")
+        written += 1
+    return written
+
+
 def _render_survivor_row(r: dict) -> str:
     return (f"| {r['score']} | {_esc(r['title'])} | {_esc(r['company'])} | {_comp(r)} "
             f"| {r.get('date_posted') or ''} | {_esc(r.get('location') or '')} "
-            f"| {r.get('job_url') or ''} |")
+            f"| {_jd_link(r)} | {r.get('job_url') or ''} |")
 
 
 def _render_killed_line(r: dict) -> str:
     """A kill is shown, never swallowed: the posting struck through, every rule
     that fired, and the quoted line of the posting that matched it."""
     flags = "; ".join(f'**{n}**: "{ev}"' for n, ev in r["flags"])
+    jd = _jd_link(r)
+    tail = f" — {jd}" if jd else ""
     return (f"- ~~{_esc(r['title'])} @ {_esc(r['company'])}~~ — {flags} "
-            f"— {r.get('job_url') or ''}")
+            f"— {r.get('job_url') or ''}{tail}")
 
 
 def _render_body(survivors, killed) -> str:
     """The survivors table plus the killed list, without frontmatter. Shared by
     a fresh write and a same-day append so both paths render identically."""
     lines = [
-        "| Score | Role | Company | Comp | Posted | Where | Link |",
-        "|---|---|---|---|---|---|---|",
+        "| Score | Role | Company | Comp | Posted | Where | JD | Link |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(survivors, key=lambda r: -r["score"]):
         lines.append(_render_survivor_row(r))
