@@ -6,9 +6,11 @@ file describes a real search.
 """
 import datetime
 
-from engine.radar.tracker import tracker_companies
+from engine.radar.tracker import closed_recent_companies, tracker_companies
 
 ACTIVE = {"active", "drafted but not applied"}
+TODAY = datetime.date(2026, 9, 13)
+WINDOW = 90
 
 
 def test_tracker_companies_parses_table_first_cells():
@@ -61,3 +63,64 @@ def test_tracker_companies_skips_header_and_separator_rows():
     text = ("## Active\n\n"
             "| Company | Role |\n| :--- | ---: |\n| Cobalt Grid | Data Engineer |\n")
     assert tracker_companies(text, ACTIVE) == {"cobalt grid"}
+
+
+# --- closed-row recency -----------------------------------------------------
+
+def test_closed_recent_companies_suppress_within_window():
+    # A company you closed with six weeks ago is a live conversation, not a
+    # clean slate. A close from five months ago is free to resurface.
+    text = (
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
+        "| Cobalt Grid | Data Platform Engineer | 2026-08-01 | Closed |\n"
+        "| Harborlight Data | Analytics Engineer | 2026-04-12 | Closed-lost |\n")
+    got = closed_recent_companies(text, TODAY, WINDOW)
+    assert "cobalt grid" in got          # 43 days ago — suppressed
+    assert "harborlight data" not in got  # 154 days ago — free to resurface
+
+
+def test_closed_recent_companies_uses_latest_date_in_cell():
+    # Date-closed cells carry prose with several dates — the LATEST ISO date
+    # decides recency, not the first one written.
+    text = (
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
+        "| Tessellate Labs | Data Engineer "
+        "| applied 2026-03-16, screen cancelled 2026-08-20 | Closed |\n")
+    assert "tessellate labs" in closed_recent_companies(text, TODAY, WINDOW)
+
+
+def test_closed_row_without_parseable_date_does_not_suppress():
+    # An unknown close date must never silently hide fresh postings.
+    text = (
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
+        "| Pinecrest Software | Data Engineer | **TBD** | TBD |\n")
+    assert closed_recent_companies(text, TODAY, WINDOW) == set()
+
+
+def test_closed_recent_ignores_other_sections():
+    # An active row's dates must not leak into the closed-recency set.
+    text = (
+        "## Active\n\n"
+        "| Company | Role | Source | Stage |\n|---|---|---|---|\n"
+        "| Meridian Rows | Data Engineer | applied 2026-09-07 | Applied |\n")
+    assert closed_recent_companies(text, TODAY, WINDOW) == set()
+
+
+def test_closed_window_is_a_parameter_not_a_constant():
+    text = (
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
+        "| Cobalt Grid | Data Engineer | 2026-08-01 | Closed |\n")
+    assert closed_recent_companies(text, TODAY, 90) == {"cobalt grid"}
+    assert closed_recent_companies(text, TODAY, 30) == set()
+
+
+def test_closed_row_dated_exactly_on_the_window_edge_still_suppresses():
+    text = (
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
+        "| Cobalt Grid | Data Engineer | 2026-06-15 | Closed |\n")
+    assert closed_recent_companies(text, TODAY, 90) == {"cobalt grid"}
