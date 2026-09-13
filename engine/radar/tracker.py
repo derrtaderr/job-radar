@@ -10,6 +10,8 @@ from __future__ import annotations
 import datetime
 import re
 
+from engine.radar.rules_engine import posting_status
+
 
 def _sections(active_sections) -> set:
     return {str(s).strip().lower() for s in (active_sections or ())}
@@ -76,6 +78,25 @@ def tracker_posting_urls(text: str, active_sections) -> list:
             # trailing markdown/sentence punctuation is not part of the address.
             out.append((first, match.group(0).rstrip(").,")))
     return out
+
+
+def check_postings(text: str, fetch, active_sections) -> list:
+    """Re-check every tracked posting and classify it live / dead / unknown.
+
+    `fetch(url)` returns (http_status, body); the caller owns the network, so
+    this stays testable and the engine stays free of transport concerns. A fetch
+    that raises is reported as "unknown", never as dead and never fatal — one
+    reset connection must not end the batch or claim a live role has closed.
+    """
+    results = []
+    for company, url in tracker_posting_urls(text, active_sections):
+        try:
+            status, body = fetch(url)
+        except Exception:
+            status, body = None, None
+        results.append({"company": company, "url": url,
+                        "status": posting_status(status, body)})
+    return results
 
 
 _ISO_DATE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
