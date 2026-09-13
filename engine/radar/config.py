@@ -114,17 +114,20 @@ def load_config(config_dir: Path) -> Config:
     )
 
     kill_rules = []
-    for rule in rules_raw.get("rules") or []:
-        name = rule.get("name", "<unnamed rule>")
-        reason = rule.get("reason", "")
-        pattern = _compile(rule.get("pattern", ""), f"rule {name!r}")
+    for idx, rule in enumerate(rules_raw.get("rules") or []):
+        name = _require(rule, "name", f"rules.yaml rule #{idx}")
+        reason = _require(rule, "reason", f"rules.yaml rule {name!r}")
+        pattern_raw = _require(rule, "pattern", f"rules.yaml rule {name!r}")
+        pattern = _compile(pattern_raw, f"rules.yaml rule {name!r}")
         kill_rules.append(KillRule(name=name, reason=reason, pattern=pattern))
 
     # --- weights.yaml ---
     title_tiers = []
-    for tier in weights_raw.get("title_tiers") or []:
-        pattern = _compile(tier.get("pattern", ""), "weights.yaml title_tiers")
-        title_tiers.append((pattern, tier.get("points")))
+    for idx, tier in enumerate(weights_raw.get("title_tiers") or []):
+        pattern_raw = _require(tier, "pattern", f"weights.yaml title_tiers #{idx}")
+        points = _require(tier, "points", f"weights.yaml title_tiers {pattern_raw!r}")
+        pattern = _compile(pattern_raw, f"weights.yaml title_tiers {pattern_raw!r}")
+        title_tiers.append((pattern, points))
 
     seniority_pattern_raw = _require(weights_raw, "seniority_pattern", "weights.yaml")
     weights = {
