@@ -5,6 +5,7 @@ and commute_pattern) against a JobSpy-shaped row.
 """
 from __future__ import annotations
 
+import datetime
 import re
 from typing import Optional
 
@@ -150,3 +151,76 @@ def kill_flags(row: dict, cfg) -> list:
                     flags.append(("location", evidence(cadence_match, text)))
 
     return flags
+
+
+def _days_old(date_posted, today: "datetime.date") -> int:
+    """Port of OLD/rules.py::_days_old (lines 107-141). A missing date_posted
+    can't be aged at all, so it's treated as a fixed 14 days old (stale enough
+    to fall into the old_pts bucket without pretending we know the real age).
+    A string is parsed as an ISO date (only the first 10 chars, so a full
+    ISO timestamp still works); a datetime is narrowed to its date. Negative
+    ages (a future date_posted, e.g. clock skew) are clamped to 0."""
+    if date_posted is None:
+        return 14
+    if isinstance(date_posted, str):
+        date_posted = datetime.date.fromisoformat(date_posted[:10])
+    elif isinstance(date_posted, datetime.datetime):
+        date_posted = date_posted.date()
+    return max(0, (today - date_posted).days)
+
+
+def score(row: dict, today: "datetime.date", cfg) -> int:
+    """Port of OLD/rules.py::score (lines 107-141), generic over cfg.title_tiers
+    and cfg.weights. Higher score means a posting is more worth a human's
+    attention: a matching senior title, comp that clears the target or floor,
+    freshness, remote-friendliness, and seniority language in the title all
+    add points; everything else falls back to config defaults."""
+    title = str(row.get("title") or "")
+
+    pts = cfg.weights["default_title_pts"]
+    for pattern, tier_pts in cfg.title_tiers:
+        if pattern.search(title):
+            pts = tier_pts
+            break
+
+    max_amount = row.get("max_amount")
+    if max_amount and float(max_amount) >= cfg.weights["comp_target"]:
+        pts += cfg.weights["target_comp_pts"]
+    elif max_amount and float(max_amount) >= cfg.comp_floor:
+        pts += cfg.weights["floor_comp_pts"]
+    elif not max_amount:
+        pts += cfg.weights["unlisted_comp_pts"]
+
+    age = _days_old(row.get("date_posted"), today)
+    if age <= cfg.weights["fresh_days"]:
+        pts += cfg.weights["fresh_pts"]
+    elif age <= 7:
+        pts += cfg.weights["week_pts"]
+    else:
+        pts += cfg.weights["old_pts"]
+
+    if row.get("is_remote"):
+        pts += cfg.weights["remote_pts"]
+
+    if cfg.weights["seniority_pattern"].search(title):
+        pts += cfg.weights["seniority_pts"]
+
+    return pts
+
+
+_CLOSED_PHRASE = re.compile(r"no longer accepting applications", re.I)
+
+
+def posting_status(http_status, body) -> str:
+    """Port of OLD/rules.py (lines 149-166), fully generic — classifies whether
+    a job posting is still live by re-fetching its URL. "unknown" is NOT a soft
+    "dead" — a rate limit or server error means we learned nothing; only an
+    explicit 404/410 or a page saying it stopped accepting applications counts
+    as dead. Treating "unknown" as "dead" would silently kill postings on
+    nothing more than a transient network hiccup."""
+    if http_status in (404, 410):
+        return "dead"
+    if http_status == 200:
+        normalized = re.sub(r"\s+", " ", body or "")
+        return "dead" if _CLOSED_PHRASE.search(normalized) else "live"
+    return "unknown"
