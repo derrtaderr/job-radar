@@ -1,0 +1,8 @@
+config/
+.privacy-denylist
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+state.json
+.DS_Store
