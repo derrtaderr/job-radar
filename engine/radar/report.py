@@ -9,6 +9,12 @@ the pipeline decided so the decision can be checked in seconds.
 from __future__ import annotations
 
 
+def _esc(s) -> str:
+    """Escape '|' so a title, company, or location containing a pipe can't
+    silently break the queue table's columns."""
+    return str(s or "").replace("|", "\\|")
+
+
 def _fmt_amount(x) -> str:
     """Scraped amounts arrive as floats. Drop a trailing ".0" so an hourly rate
     renders as "40" rather than "40.0"; keep a real fraction."""
@@ -40,3 +46,57 @@ def _comp(row: dict) -> str:
     if lo:
         return f"from ${int(float(lo) / 1000)}K"
     return "unlisted"
+
+
+def _render_survivor_row(r: dict) -> str:
+    return (f"| {r['score']} | {_esc(r['title'])} | {_esc(r['company'])} | {_comp(r)} "
+            f"| {r.get('date_posted') or ''} | {_esc(r.get('location') or '')} "
+            f"| {r.get('job_url') or ''} |")
+
+
+def _render_killed_line(r: dict) -> str:
+    """A kill is shown, never swallowed: the posting struck through, every rule
+    that fired, and the quoted line of the posting that matched it."""
+    flags = "; ".join(f'**{n}**: "{ev}"' for n, ev in r["flags"])
+    return (f"- ~~{_esc(r['title'])} @ {_esc(r['company'])}~~ — {flags} "
+            f"— {r.get('job_url') or ''}")
+
+
+def _render_body(survivors, killed) -> str:
+    """The survivors table plus the killed list, without frontmatter. Shared by
+    a fresh write and a same-day append so both paths render identically."""
+    lines = [
+        "| Score | Role | Company | Comp | Posted | Where | Link |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in sorted(survivors, key=lambda r: -r["score"]):
+        lines.append(_render_survivor_row(r))
+    if killed:
+        lines += ["", "## Killed by rule (overrule by hand if the flag is wrong)", ""]
+        for r in killed:
+            lines.append(_render_killed_line(r))
+    return "\n".join(lines)
+
+
+def render_report(survivors, killed, day):
+    """The day's queue as markdown, or None when the run produced nothing.
+
+    None rather than an empty document is deliberate: a queue.md with no rows
+    looks like a finished run that genuinely found nothing, which is the one
+    thing a broken run also looks like.
+    """
+    if not survivors and not killed:
+        return None
+    header = [
+        "---",
+        f"name: Job radar {day}",
+        "read_by: your daily review session",
+        "---",
+        "",
+        f"# Job radar — {day}",
+        "",
+        f"{len(survivors)} in the queue, {len(killed)} killed by rule "
+        "(shown below, never silently).",
+        "",
+    ]
+    return "\n".join(header) + _render_body(survivors, killed) + "\n"
