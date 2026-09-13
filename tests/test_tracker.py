@@ -7,6 +7,7 @@ file describes a real search.
 import datetime
 
 from engine.radar.tracker import (
+    check_postings,
     closed_recent_companies,
     tracker_companies,
     tracker_posting_urls,
@@ -221,3 +222,55 @@ def test_tracker_posting_urls_trims_markdown_punctuation_off_the_url():
             "| Cobalt Grid | Data Engineer | (https://example.com/jobs/view/1), applied |\n")
     assert tracker_posting_urls(text, ACTIVE) == [
         ("Cobalt Grid", "https://example.com/jobs/view/1")]
+
+
+# --- liveness batch ---------------------------------------------------------
+
+THREE_TRACKED = """## Active
+
+| Company | Role | Source |
+|---|---|---|
+| Cobalt Grid | Data Engineer | (https://example.com/jobs/view/1) |
+| Harborlight Data | Data Engineer | (https://example.com/jobs/view/2) |
+| Tessellate Labs | Data Engineer | (https://example.com/jobs/view/3) |
+"""
+
+
+def test_check_postings_classifies_each_url():
+    responses = {
+        "https://example.com/jobs/view/1": (200, "Apply now. Data Engineer, remote."),
+        "https://example.com/jobs/view/2": (404, ""),
+        "https://example.com/jobs/view/3": (200, "No longer accepting applications"),
+    }
+    assert check_postings(THREE_TRACKED, lambda url: responses[url], ACTIVE) == [
+        {"company": "Cobalt Grid", "url": "https://example.com/jobs/view/1",
+         "status": "live"},
+        {"company": "Harborlight Data", "url": "https://example.com/jobs/view/2",
+         "status": "dead"},
+        {"company": "Tessellate Labs", "url": "https://example.com/jobs/view/3",
+         "status": "dead"},
+    ]
+
+
+def test_check_postings_reports_unknown_when_the_fetch_raises():
+    # A network error on one row must not end the batch or masquerade as dead.
+    def fetch(url):
+        if url.endswith("/1"):
+            raise OSError("connection reset")
+        return (200, "Apply now")
+
+    got = check_postings(THREE_TRACKED, fetch, ACTIVE)
+    assert [r["status"] for r in got] == ["unknown", "live", "live"]
+
+
+def test_check_postings_reports_unknown_on_rate_limit():
+    # The load-bearing case: a 429 must never read as dead, or a rate-limited
+    # batch tells you to skip applications that are still open.
+    got = check_postings(THREE_TRACKED, lambda url: (429, ""), ACTIVE)
+    assert [r["status"] for r in got] == ["unknown", "unknown", "unknown"]
+
+
+def test_check_postings_returns_empty_when_no_urls_tracked():
+    text = ("## Active\n\n| Company | Role |\n|---|---|\n"
+            "| Cobalt Grid | Data Engineer |\n")
+    assert check_postings(text, lambda url: (200, ""), ACTIVE) == []
