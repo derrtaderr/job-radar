@@ -3,7 +3,14 @@
 Every fixture here is synthetic — fictional employers for the example persona
 (a data engineer), fictional posting URLs under example.com.
 """
-from engine.radar.report import _comp, _jd_filename, render_report, write_jds
+from engine.radar.report import (
+    _comp,
+    _jd_filename,
+    day_paths,
+    render_report,
+    write_jds,
+    write_report,
+)
 from tests.fixtures import make_report_row
 
 DAY = "2026-09-13"
@@ -201,3 +208,59 @@ def test_render_no_jd_link_when_description_missing():
     # dead link in the queue is worse than no link.
     assert "jd/" not in render_report([make_report_row(jid="job-3", description=None)],
                                       [], DAY)
+
+
+# --- the day folder ---------------------------------------------------------
+
+def test_day_paths_compose_one_folder_per_day(tmp_path):
+    # Everything for one run lives together, so acting on the queue is "open
+    # today's folder" rather than hunting across an output tree.
+    day_dir, queue, jd_dir = day_paths(tmp_path, DAY)
+    assert day_dir == tmp_path / DAY
+    assert queue == tmp_path / DAY / "queue.md"
+    assert jd_dir == tmp_path / DAY / "jd"
+
+
+def test_day_paths_accepts_a_date_object(tmp_path):
+    import datetime
+    day_dir, _, _ = day_paths(tmp_path, datetime.date(2026, 9, 13))
+    assert day_dir.name == "2026-09-13"
+
+
+def test_write_report_writes_a_fresh_file_and_creates_its_folder(tmp_path):
+    path = tmp_path / DAY / "queue.md"
+    assert write_report(path, [make_report_row()], [], DAY) is True
+    assert f"Job radar — {DAY}" in path.read_text()
+
+
+def test_write_report_appends_when_the_day_already_has_a_queue(tmp_path):
+    # A second run on the same day must never destroy the first run's queue —
+    # you may already have acted on it.
+    path = tmp_path / "queue.md"
+    path.write_text("---\nname: Job radar 2026-09-13\n---\n\nfirst run row here\n")
+    assert write_report(path, [make_report_row(company="Tessellate Labs")], [], DAY) is True
+
+    out = path.read_text()
+    assert "first run row here" in out
+    assert "## Later run (same day)" in out
+    assert "Tessellate Labs" in out
+
+
+def test_write_report_appends_without_a_second_frontmatter_block(tmp_path):
+    path = tmp_path / "queue.md"
+    write_report(path, [make_report_row()], [], DAY)
+    write_report(path, [make_report_row(company="Tessellate Labs")], [], DAY)
+    assert path.read_text().count("read_by:") == 1
+
+
+def test_write_report_leaves_the_file_untouched_when_there_is_nothing_to_write(tmp_path):
+    path = tmp_path / "queue.md"
+    path.write_text("first run row here\n")
+    assert write_report(path, [], [], DAY) is False
+    assert path.read_text() == "first run row here\n"
+
+
+def test_write_report_creates_nothing_when_there_is_nothing_to_write(tmp_path):
+    path = tmp_path / DAY / "queue.md"
+    assert write_report(path, [], [], DAY) is False
+    assert not path.exists()
