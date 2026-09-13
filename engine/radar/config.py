@@ -57,6 +57,18 @@ def _require(data: dict, key: str, filename: str):
     return value
 
 
+def _require_int(data: dict, key: str, where: str) -> int:
+    # PyYAML parses `yes`/`no`/`true`/`false` as bool, and bool is a subclass of
+    # int in Python (True == 1), so `isinstance(x, int)` alone lets a typo'd
+    # `points: yes` through as a silent 1. A float (`15.0`) passes the "it's a
+    # number" instinct too but violates the int contract just as quietly.
+    # Both must be rejected explicitly, not just "isn't missing."
+    value = _require(data, key, where)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ConfigError(f"{key!r} in {where} must be an integer, got {value!r}")
+    return value
+
+
 def _compile(pattern: str, where: str) -> "re.Pattern[str]":
     try:
         return re.compile(pattern, re.IGNORECASE)
@@ -101,13 +113,13 @@ def load_config(config_dir: Path) -> Config:
     queries = _require(queries_raw, "searches", "queries.yaml")
     sites = _require(queries_raw, "sites", "queries.yaml")
     search_location = _require(queries_raw, "location", "queries.yaml")
-    hours_old = _require(queries_raw, "hours_old", "queries.yaml")
-    results_per_query = _require(queries_raw, "results_per_query", "queries.yaml")
+    hours_old = _require_int(queries_raw, "hours_old", "queries.yaml")
+    results_per_query = _require_int(queries_raw, "results_per_query", "queries.yaml")
     title_keep = _compile(_require(queries_raw, "title_keep", "queries.yaml"), "queries.yaml title_keep")
     title_drop = _compile(_require(queries_raw, "title_drop", "queries.yaml"), "queries.yaml title_drop")
 
     # --- rules.yaml ---
-    comp_floor = _require(rules_raw, "comp_floor", "rules.yaml")
+    comp_floor = _require_int(rules_raw, "comp_floor", "rules.yaml")
     commute_locations = rules_raw.get("commute_locations") or None
     commute_pattern = (
         _compile(commute_locations, "rules.yaml commute_locations") if commute_locations else None
@@ -125,24 +137,24 @@ def load_config(config_dir: Path) -> Config:
     title_tiers = []
     for idx, tier in enumerate(weights_raw.get("title_tiers") or []):
         pattern_raw = _require(tier, "pattern", f"weights.yaml title_tiers #{idx}")
-        points = _require(tier, "points", f"weights.yaml title_tiers {pattern_raw!r}")
+        points = _require_int(tier, "points", f"weights.yaml title_tiers {pattern_raw!r}")
         pattern = _compile(pattern_raw, f"weights.yaml title_tiers {pattern_raw!r}")
         title_tiers.append((pattern, points))
 
     seniority_pattern_raw = _require(weights_raw, "seniority_pattern", "weights.yaml")
     weights = {
-        "comp_target": _require(weights_raw, "comp_target", "weights.yaml"),
-        "target_comp_pts": _require(weights_raw, "target_comp_pts", "weights.yaml"),
-        "floor_comp_pts": _require(weights_raw, "floor_comp_pts", "weights.yaml"),
-        "unlisted_comp_pts": _require(weights_raw, "unlisted_comp_pts", "weights.yaml"),
-        "fresh_days": _require(weights_raw, "fresh_days", "weights.yaml"),
-        "fresh_pts": _require(weights_raw, "fresh_pts", "weights.yaml"),
-        "week_pts": _require(weights_raw, "week_pts", "weights.yaml"),
-        "old_pts": _require(weights_raw, "old_pts", "weights.yaml"),
-        "remote_pts": _require(weights_raw, "remote_pts", "weights.yaml"),
+        "comp_target": _require_int(weights_raw, "comp_target", "weights.yaml"),
+        "target_comp_pts": _require_int(weights_raw, "target_comp_pts", "weights.yaml"),
+        "floor_comp_pts": _require_int(weights_raw, "floor_comp_pts", "weights.yaml"),
+        "unlisted_comp_pts": _require_int(weights_raw, "unlisted_comp_pts", "weights.yaml"),
+        "fresh_days": _require_int(weights_raw, "fresh_days", "weights.yaml"),
+        "fresh_pts": _require_int(weights_raw, "fresh_pts", "weights.yaml"),
+        "week_pts": _require_int(weights_raw, "week_pts", "weights.yaml"),
+        "old_pts": _require_int(weights_raw, "old_pts", "weights.yaml"),
+        "remote_pts": _require_int(weights_raw, "remote_pts", "weights.yaml"),
         "seniority_pattern": _compile(seniority_pattern_raw, "weights.yaml seniority_pattern"),
-        "seniority_pts": _require(weights_raw, "seniority_pts", "weights.yaml"),
-        "default_title_pts": _require(weights_raw, "default_title_pts", "weights.yaml"),
+        "seniority_pts": _require_int(weights_raw, "seniority_pts", "weights.yaml"),
+        "default_title_pts": _require_int(weights_raw, "default_title_pts", "weights.yaml"),
     }
 
     # --- settings.yaml ---
@@ -152,7 +164,7 @@ def load_config(config_dir: Path) -> Config:
     tracker = settings_raw.get("tracker") or None
     tracker_path = (base / tracker).resolve() if tracker else None
     tracker_active_sections = set(_require(settings_raw, "tracker_active_sections", "settings.yaml"))
-    closed_window_days = _require(settings_raw, "closed_window_days", "settings.yaml")
+    closed_window_days = _require_int(settings_raw, "closed_window_days", "settings.yaml")
 
     # --- exclusions.txt ---
     exclusions = _load_exclusions(config_dir / "exclusions.txt")
