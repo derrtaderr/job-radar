@@ -81,3 +81,35 @@ def closed_recent_companies(text: str, today, window_days: int) -> set:
         if (today - latest).days <= window_days:
             companies.add(first.lower())
     return companies
+
+
+def _normalize_tracker_cell(cell: str) -> str:
+    """Strip a trailing parenthetical annotation (e.g. "(via referral)") and
+    surrounding whitespace, lowercased. Tracker cells carry notes a scraped
+    posting never will, and those notes must not defeat a match."""
+    c = (cell or "").strip()
+    if c.endswith(")") and "(" in c:
+        c = c[:c.rindex("(")].strip()
+    return c.lower()
+
+
+def tracker_suppresses(company, tracker_set) -> bool:
+    """Does a scraped company name correspond to something already tracked?
+
+    Exact matching misses real hits, because the two sides are written by
+    different authors: the scrape says "Harborlight Data, Inc." where the
+    tracker says "Harborlight Data (via referral)". So normalize both sides and
+    match by substring in either direction — with a floor of 4 characters on the
+    shorter string, so a two-letter cell can't degenerate into matching
+    everything.
+    """
+    c = (company or "").strip().lower()
+    if not c:
+        return False
+    for t in tracker_set:
+        tn = _normalize_tracker_cell(t)
+        if not tn or min(len(tn), len(c)) < 4:
+            continue
+        if tn in c or c in tn:
+            return True
+    return False
