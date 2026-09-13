@@ -7,6 +7,9 @@ closed row keeps suppressing, are both config, not engine opinions.
 """
 from __future__ import annotations
 
+import datetime
+import re
+
 
 def _sections(active_sections) -> set:
     return {str(s).strip().lower() for s in (active_sections or ())}
@@ -46,5 +49,35 @@ def tracker_companies(text: str, active_sections) -> set:
     for line in _walk_sections(text, wanted):
         first = _first_cell(line)
         if first:
+            companies.add(first.lower())
+    return companies
+
+
+_ISO_DATE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
+
+
+def closed_recent_companies(text: str, today, window_days: int) -> set:
+    """Companies whose Closed row carries a close date inside the window.
+
+    A recent close is a live conversation, not a clean slate — re-queueing a
+    company you just finished with is exactly the miss this prevents. An ancient
+    close is free to resurface, which is why the window is a number from config
+    rather than a permanent blocklist. A row with no parseable date does NOT
+    suppress: an unknown close date must never silently hide fresh postings.
+    """
+    companies = set()
+    for line in _walk_sections(text, {"closed"}):
+        first = _first_cell(line)
+        if not first:
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        date_cell = cells[3] if len(cells) > 3 else ""
+        # Date cells carry prose with several dates ("applied 2026-03-16, screen
+        # cancelled 2026-08-20") — the latest ISO date decides recency.
+        dates = _ISO_DATE.findall(date_cell)
+        if not dates:
+            continue
+        latest = datetime.date.fromisoformat(max(dates))
+        if (today - latest).days <= window_days:
             companies.add(first.lower())
     return companies
