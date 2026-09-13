@@ -21,10 +21,22 @@ SKIP_FILES = {".privacy-denylist.example", "tests/test_privacy_guard.py"}
 
 # RFC 2606 reserves these domains for documentation — never a real address.
 RESERVED_EMAIL_DOMAINS = {"example.com", "example.org", "example.net"}
+DOMAIN_CHARS = re.compile(r"[\w.-]+")
 
 
-def _is_reserved_domain(email):
-    domain = email.rsplit("@", 1)[-1].lower()
+def _is_reserved_domain(text, match):
+    # EMAIL only captures a single label + TLD (e.g. it truncates
+    # "example.com" out of a longer address whose real domain continues
+    # past that point with more labels), so trusting match.group(0) alone
+    # would let a real domain that merely STARTS WITH a reserved one slip
+    # through undetected. Re-extract the FULL run of domain characters from
+    # the surrounding text starting right after "@", strip only a trailing
+    # sentence-period (never part of a real domain), and require an exact
+    # match against the reserved set.
+    at = match.group(0).rindex("@")
+    start = match.start() + at + 1
+    full = DOMAIN_CHARS.match(text, start)
+    domain = full.group(0).rstrip(".").lower() if full else ""
     return domain in RESERVED_EMAIL_DOMAINS
 
 
@@ -40,7 +52,7 @@ def _is_nanp_fictional(phone):
 def scan_text(text, denylist):
     hits = []
     for m in EMAIL.finditer(text):
-        if not _is_reserved_domain(m.group(0)):
+        if not _is_reserved_domain(text, m):
             hits.append(f"email: {m.group(0)}")
     for m in PHONE.finditer(text):
         if not _is_nanp_fictional(m.group(0)):
