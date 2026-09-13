@@ -53,6 +53,31 @@ def tracker_companies(text: str, active_sections) -> set:
     return companies
 
 
+_POSTING_URL = re.compile(r"https?://[^\s)|]+")
+
+
+def tracker_posting_urls(text: str, active_sections) -> list:
+    """(company, url) for every active-section row carrying a posting URL.
+
+    Deliberately the same sections as tracker_companies: a closed row is not a
+    pending application, and re-checking its posting would produce noise about a
+    job nobody is waiting on. Rows with no URL (a recruiter conversation, say)
+    are skipped rather than reported — there is nothing to check.
+    """
+    wanted = _sections(active_sections)
+    out = []
+    for line in _walk_sections(text, wanted):
+        first = _first_cell(line)
+        if not first:
+            continue
+        match = _POSTING_URL.search(line)
+        if match:
+            # The URL usually sits in a parenthetical inside a prose cell, so
+            # trailing markdown/sentence punctuation is not part of the address.
+            out.append((first, match.group(0).rstrip(").,")))
+    return out
+
+
 _ISO_DATE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 
 
