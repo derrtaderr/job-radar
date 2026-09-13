@@ -9,6 +9,7 @@ import datetime
 from engine.radar.tracker import (
     closed_recent_companies,
     tracker_companies,
+    tracker_posting_urls,
     tracker_suppresses,
 )
 
@@ -156,3 +157,67 @@ def test_tracker_suppresses_rejects_unrelated_and_empty_names():
     assert not tracker_suppresses("", {"cobalt grid"})
     assert not tracker_suppresses(None, {"cobalt grid"})
     assert not tracker_suppresses("Cobalt Grid", set())
+
+
+# --- tracked posting URLs ---------------------------------------------------
+
+def test_tracker_posting_urls_pulls_company_and_url_from_active_sections():
+    text = """## Active
+
+| Company | Role | Source | Stage |
+|---|---|---|---|
+| Cobalt Grid | Data Engineer | job-radar 2026-09-11 (https://example.com/jobs/view/1) | Applied |
+| Harborlight Data | Data Engineer | job-radar 2026-09-12 (https://example.com/jobs/view/2) | Applied |
+
+## Drafted but not applied
+
+| Company | Role | Source |
+|---|---|---|
+| Tessellate Labs | Analytics Engineer | job-radar 2026-09-13 (https://example.com/jobs/view/3) |
+"""
+    assert tracker_posting_urls(text, ACTIVE) == [
+        ("Cobalt Grid", "https://example.com/jobs/view/1"),
+        ("Harborlight Data", "https://example.com/jobs/view/2"),
+        ("Tessellate Labs", "https://example.com/jobs/view/3"),
+    ]
+
+
+def test_tracker_posting_urls_skips_rows_without_a_url():
+    # A recruiter-sourced conversation has nothing to re-check, so it is skipped
+    # rather than reported as a problem.
+    text = """## Active
+
+| Company | Role | Source |
+|---|---|---|
+| Pinecrest Software | Data Engineer | Inbound recruiter (no posting) |
+| Cobalt Grid | Data Engineer | job-radar (https://example.com/jobs/view/1) |
+"""
+    assert tracker_posting_urls(text, ACTIVE) == [
+        ("Cobalt Grid", "https://example.com/jobs/view/1")]
+
+
+def test_tracker_posting_urls_ignores_inactive_sections():
+    # A closed row's posting must never be re-checked — it is not pending.
+    text = """## Active
+
+| Company | Role | Source |
+|---|---|---|
+| Cobalt Grid | Data Engineer | job-radar (https://example.com/jobs/view/1) |
+
+## Closed
+
+| Company | Role | Source |
+|---|---|---|
+| Meridian Rows | Data Engineer | outbound (https://example.com/jobs/view/9) |
+"""
+    assert tracker_posting_urls(text, ACTIVE) == [
+        ("Cobalt Grid", "https://example.com/jobs/view/1")]
+
+
+def test_tracker_posting_urls_trims_markdown_punctuation_off_the_url():
+    # The URL sits inside a parenthetical in a table cell; the closing paren and
+    # any trailing comma or period belong to the prose, not the address.
+    text = ("## Active\n\n| Company | Role | Source |\n|---|---|---|\n"
+            "| Cobalt Grid | Data Engineer | (https://example.com/jobs/view/1), applied |\n")
+    assert tracker_posting_urls(text, ACTIVE) == [
+        ("Cobalt Grid", "https://example.com/jobs/view/1")]
