@@ -49,3 +49,45 @@ def test_tier_missing_points_names_the_tier(tmp_path):
     (tmp_path / "exclusions.txt").write_text("")
     with pytest.raises(ConfigError, match="analytics engineer"):
         load_config(tmp_path)
+
+
+def test_tier_points_bool_rejected(tmp_path):
+    # PyYAML parses `yes` as True, and True == 1 in Python — a 30-point tier
+    # written as `points: yes` would silently score as 1 instead of failing loudly.
+    broken_weights = (EXAMPLE / "weights.yaml").read_text().replace(
+        "  - {pattern: 'analytics engineer', points: 15}",
+        "  - {pattern: 'analytics engineer', points: yes}",
+    )
+    (tmp_path / "weights.yaml").write_text(broken_weights)
+    for f in ("queries", "rules", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="analytics engineer"):
+        load_config(tmp_path)
+
+
+def test_tier_points_float_rejected(tmp_path):
+    broken_weights = (EXAMPLE / "weights.yaml").read_text().replace(
+        "  - {pattern: 'analytics engineer', points: 15}",
+        "  - {pattern: 'analytics engineer', points: 15.0}",
+    )
+    (tmp_path / "weights.yaml").write_text(broken_weights)
+    for f in ("queries", "rules", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="analytics engineer"):
+        load_config(tmp_path)
+
+
+def test_comp_floor_bool_rejected(tmp_path):
+    # Same silent-misbehavior class as the tier `points` bug, extended to
+    # comp_floor since it's compared numerically downstream the same way.
+    broken_rules = (EXAMPLE / "rules.yaml").read_text().replace(
+        "comp_floor: 120000", "comp_floor: yes"
+    )
+    (tmp_path / "rules.yaml").write_text(broken_rules)
+    for f in ("queries", "weights", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="comp_floor"):
+        load_config(tmp_path)
