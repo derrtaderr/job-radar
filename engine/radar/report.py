@@ -51,6 +51,17 @@ def _comp(row: dict) -> str:
     return "unlisted"
 
 
+def day_paths(output_dir, day):
+    """(day_dir, queue_path, jd_dir) for one run date.
+
+    One folder per day, holding the queue and every JD it references, so acting
+    on a queue is "open today's folder" instead of hunting across an output tree
+    for the pieces of a single run.
+    """
+    day_dir = Path(output_dir) / str(day)
+    return day_dir, day_dir / "queue.md", day_dir / "jd"
+
+
 def _jd_filename(jid) -> str:
     """The filename a row's JD is stored under. `jid` falls back to the job URL
     when a row has no id, so slashes and colons have to be sanitized before they
@@ -153,3 +164,24 @@ def render_report(survivors, killed, day):
         "",
     ]
     return "\n".join(header) + _render_body(survivors, killed) + "\n"
+
+
+def write_report(path, survivors, killed, day) -> bool:
+    """Write the day's queue. Returns True if anything was written.
+
+    A second run on the same day APPENDS rather than overwrites. By the time it
+    runs you may already have acted on the first run's queue, and silently
+    replacing it would destroy the record of what you were working from.
+    """
+    report = render_report(survivors, killed, day)
+    if not report:
+        return False
+    path = Path(path)
+    if path.exists():
+        with path.open("a") as f:
+            f.write("\n## Later run (same day)\n\n"
+                    + _render_body(survivors, killed) + "\n")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(report)
+    return True
