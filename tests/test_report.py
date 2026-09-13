@@ -89,6 +89,14 @@ def test_render_frontmatter_reader_is_generic():
         "read_by: your daily review session"]
 
 
+def test_render_leaves_a_blank_line_before_the_table():
+    # Markdown renderers need one; without it the header paragraph swallows the
+    # table and the queue renders as a wall of pipes.
+    lines = render_report([make_report_row()], [], DAY).splitlines()
+    header_row = next(i for i, l in enumerate(lines) if l.startswith("| Score"))
+    assert lines[header_row - 1] == ""
+
+
 def test_render_counts_survivors_and_kills_in_the_header():
     out = render_report(
         [make_report_row()],
