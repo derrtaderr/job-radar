@@ -11,6 +11,50 @@ from typing import Optional
 _COMP_CONTEXT = re.compile(r"salary|compensation|base pay|pay range|\bcomp\b|\bOTE\b", re.I)
 _MONEY = re.compile(r"\$?\s?(\d{2,3})(?:,(\d{3}))?\s?(k\b)?", re.I)
 
+# Ported verbatim from OLD/rules.py (lines 55-78) — generic engine constants for
+# detecting affirmative remote language in a JD while skipping negated mentions.
+_REMOTE_OK = re.compile(
+    r"fully remote|100 ?% remote|remote[- ]first|remote[- ]friendly|remote[- ]eligible"
+    r"|remote (?:position|role|opportunity|job)"
+    r"|work from home|work from anywhere|work(?:ing)? remotely"
+    r"|#li[- ]remote"
+    r"|remote \((?:us|usa|united states|anywhere)"
+    r"|(?:us|u\.s\.|usa)[- ]remote"
+    r"|remote,? (?:us\b|usa\b|united states)"
+    r"|open to remote", re.I)
+
+_NEG = re.compile(r"\b(?:not|no|isn'?t|never)\b", re.I)
+
+
+def _jd_says_remote(text):
+    """Affirmative remote language in the JD, skipping negated mentions — "not a
+    remote position" (negation before) and "remote work is not available"
+    (negation after, checked only to the end of the sentence)."""
+    for m in _REMOTE_OK.finditer(text):
+        before = text[max(0, m.start() - 30):m.start()]
+        after = text[m.end():m.end() + 30].split(".")[0]
+        if _NEG.search(before) or _NEG.search(after):
+            continue
+        return evidence(m, text)
+    return None
+
+
+# Rule-tuning candidate 2 (Task 7): an office city stated only in the body, and
+# in-office-cadence language that defeats a remote-language override.
+_CITY = r"([A-Z][a-z]+(?: [A-Z][a-z]+)?(?:, [A-Z]{2})?)"
+_BODY_LOC = re.compile(r"(?:based|located) in " + _CITY
+                       + r"|office in " + _CITY
+                       + r"|on[- ]?site in " + _CITY)
+_OFFICE_CADENCE = re.compile(
+    r"\d+ days? (?:a |per )?week in (?:the |our )?office|days? in[- ]office"
+    r"|hybrid (?:schedule|work model|role)|in[- ]office \d+ days?"
+    r"|work from home [A-Z][a-z]+days", re.I)
+
+
+def body_location(text):
+    m = _BODY_LOC.search(text or "")
+    return next((g for g in m.groups() if g), None) if m else None
+
 
 def body_stated_max(text):
     """Largest yearly salary stated in body text, or None. Conservative: a number
@@ -83,5 +127,26 @@ def kill_flags(row: dict, cfg) -> list:
         stated_max, snippet = _best_comp_evidence(text)
         if stated_max is not None and stated_max < cfg.comp_floor:
             flags.append(("comp-below-floor-stated", snippet))
+
+    if not row.get("is_remote"):
+        structured_location = str(row.get("location") or "").strip()
+        body_match = None if structured_location else _BODY_LOC.search(text)
+        effective_location = structured_location or (
+            next((g for g in body_match.groups() if g), None) if body_match else None
+        )
+
+        if effective_location:
+            commute_matches = bool(cfg.commute_pattern and cfg.commute_pattern.search(effective_location))
+            if not commute_matches:
+                override = _jd_says_remote(text) and not _OFFICE_CADENCE.search(text)
+                if not override:
+                    loc_evidence = structured_location if structured_location else evidence(body_match, text)
+                    flags.append(("location", loc_evidence))
+        else:
+            cadence_match = _OFFICE_CADENCE.search(text)
+            if cadence_match:
+                commute_matches_anywhere = bool(cfg.commute_pattern and cfg.commute_pattern.search(text))
+                if not commute_matches_anywhere:
+                    flags.append(("location", evidence(cadence_match, text)))
 
     return flags
