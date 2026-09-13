@@ -1,0 +1,17 @@
+title_tiers:                    # first match wins, top to bottom
+  - {pattern: 'data platform engineer', points: 30}
+  - {pattern: 'senior data engineer', points: 25}
+  - {pattern: 'data engineer', points: 20}
+  - {pattern: 'analytics engineer', points: 15}
+default_title_pts: 5
+comp_target: 180000
+target_comp_pts: 20
+floor_comp_pts: 15
+unlisted_comp_pts: 8
+fresh_days: 3
+fresh_pts: 20
+week_pts: 12
+old_pts: 5
+remote_pts: 10
+seniority_pattern: 'senior|staff|principal|lead'
+seniority_pts: 8

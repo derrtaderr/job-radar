@@ -1,0 +1,14 @@
+# Kill rules: every "never again" you learn becomes a line here, enforced on
+# every future posting. A kill quotes the matched line — overrulable, never silent.
+comp_floor: 120000            # yearly max below this (posted or body-stated) kills
+commute_locations: 'Denver|Boulder'   # non-remote postings here still pass; '' = remote-only
+rules:
+  - name: bdr-scope
+    reason: quota or dial-volume language means a sales seat, not an engineering seat
+    pattern: 'carry(?:ing)? (?:a |your )?quota|quota[- ]carrying|cold call|\b\d+ (?:dials|calls) per (?:day|week)'
+  - name: not-ic
+    reason: people-management as primary scope
+    pattern: '(?:hire and )?manage a team|direct reports|people management'
+  - name: legacy-stack
+    reason: personal rule example — roles centered on tools this persona has ruled out
+    pattern: '(?:SSIS|SSRS)\s+(?:is|as) (?:the|our) (?:core|primary)'

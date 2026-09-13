@@ -1,0 +1,2 @@
+# Companies never to surface — one per line, case-insensitive substring match.
+# example-company-you-never-want-to-see-again
