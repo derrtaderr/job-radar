@@ -3,7 +3,7 @@
 Every fixture here is synthetic — fictional employers for the example persona
 (a data engineer), fictional posting URLs under example.com.
 """
-from engine.radar.report import _comp, render_report
+from engine.radar.report import _comp, _jd_filename, render_report, write_jds
 from tests.fixtures import make_report_row
 
 DAY = "2026-09-13"
@@ -127,3 +127,77 @@ def test_render_escapes_pipe_in_title_and_company():
                                          company="Cobalt | Grid")], [], DAY)
     assert "Data Engineer \\| Platform" in out
     assert "Cobalt \\| Grid" in out
+
+
+# --- local JD files ---------------------------------------------------------
+
+def test_jd_filename_sanitizes_url_fallback_ids():
+    # A row with no id falls back to its URL, so slashes and colons must never
+    # reach the filesystem.
+    name = _jd_filename("https://example.com/jobs/view/1?src=a")
+    assert "/" not in name and ":" not in name
+    assert name.endswith(".md")
+
+
+def test_jd_filename_keeps_a_plain_id_readable():
+    assert _jd_filename("job-123") == "job-123.md"
+
+
+def test_write_jds_writes_survivor_and_killed_descriptions(tmp_path):
+    # Kills get a JD file too: checking a suspected false kill must not require
+    # re-fetching a posting that may already be behind a bot wall.
+    survivors = [make_report_row(jid="a", description="Own the data platform end to end.")]
+    killed = [dict(make_report_row(company="Quarry Systems", jid="e",
+                                   description="You will carry a quota of 30 meetings."),
+                   flags=[("bdr-scope", "carry a quota")])]
+    assert write_jds(tmp_path, survivors, killed, DAY) == 2
+
+    surv = (tmp_path / "a.md").read_text()
+    assert "Own the data platform end to end." in surv
+    assert "Data Platform Engineer" in surv and "Northwind Analytics" in surv
+    assert "https://example.com/jobs/view/1" in surv
+    assert f"captured: {DAY}" in surv
+
+    kill = (tmp_path / "e.md").read_text()
+    assert "You will carry a quota of 30 meetings." in kill
+    assert "bdr-scope" in kill  # a killed JD names the flag that killed it
+
+
+def test_write_jds_omits_the_killed_line_for_survivors(tmp_path):
+    write_jds(tmp_path, [make_report_row(jid="a", description="Own the pipeline.")],
+              [], DAY)
+    assert "Killed by:" not in (tmp_path / "a.md").read_text()
+
+
+def test_write_jds_skips_rows_without_description(tmp_path):
+    # No description means no file, and no directory created for nothing.
+    assert write_jds(tmp_path / "jd", [make_report_row(jid="a", description=None)],
+                     [], DAY) == 0
+    assert not (tmp_path / "jd").exists()
+
+
+def test_write_jds_creates_the_directory_on_demand(tmp_path):
+    target = tmp_path / "2026-09-13" / "jd"
+    assert write_jds(target, [make_report_row(jid="a", description="Own it.")],
+                     [], DAY) == 1
+    assert (target / "a.md").exists()
+
+
+def test_render_survivor_row_links_local_jd():
+    out = render_report([make_report_row(jid="job-1", description="Some JD text.")],
+                        [], DAY)
+    assert "jd/job-1.md" in out
+
+
+def test_render_killed_line_links_local_jd():
+    out = render_report([], [dict(make_report_row(jid="job-2",
+                                                  description="carry a quota"),
+                                  flags=[("bdr-scope", "carry a quota")])], DAY)
+    assert "jd/job-2.md" in out
+
+
+def test_render_no_jd_link_when_description_missing():
+    # No description means no JD file was written, so no link may render — a
+    # dead link in the queue is worse than no link.
+    assert "jd/" not in render_report([make_report_row(jid="job-3", description=None)],
+                                      [], DAY)
