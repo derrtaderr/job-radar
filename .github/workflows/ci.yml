@@ -10,3 +10,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python tools/privacy_guard.py
       - run: pytest -q
+      - name: config smoke test (no network — proves config loads and the pipeline runs on zero rows)
+        run: |
+          cp -r config.example config
+          python radar.py --dry-run --config config
