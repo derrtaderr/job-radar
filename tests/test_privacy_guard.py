@@ -44,6 +44,20 @@ def test_real_looking_email_still_caught():
     assert scan_text("contact j.smith@gmail.com", []) != []
 
 
+def test_reserved_domain_carveout_does_not_bypass_real_subdomain():
+    # EMAIL's regex only captures a single label + TLD, so it truncates
+    # "example.com.attacker.io" down to "example.com". The carve-out must
+    # not trust that truncated match — the real, deliverable domain here is
+    # "example.com.attacker.io", which is not reserved and must be caught.
+    assert scan_text("realname@example.com.attacker.io", []) != []
+
+
+def test_reserved_domain_carveout_survives_trailing_sentence_period():
+    # Sentence-ending punctuation must not defeat the carve-out: the actual
+    # domain is still exactly example.com, just followed by a period.
+    assert scan_text("contact jane.doe@example.com.", []) == []
+
+
 def test_denylist_still_fires_on_placeholder_content():
     # A safe-placeholder email in the same string must not suppress a real
     # denylist hit — only the built-in email/phone patterns get the carve-out.
