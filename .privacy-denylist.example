@@ -1,0 +1,3 @@
+# Copy to .privacy-denylist (gitignored) and list terms that must never appear
+# in tracked files: your name, employers, client names, city, etc.
+# One per line, case-insensitive substring match.
