@@ -46,16 +46,39 @@ def _scrape_module():
     return importlib.import_module("engine.radar.scrape")
 
 
+UNSET, MISSING, FOUND = "unset", "missing", "found"
+
+
 def _tracker_text(cfg):
-    if cfg.tracker_path and cfg.tracker_path.exists():
-        return cfg.tracker_path.read_text()
-    return None
+    """(state, text) for the configured tracker.
+
+    Three states, not two. "You never configured a tracker" and "you configured
+    one and the file isn't there" look identical downstream — both yield no text
+    — but they are different mistakes with different fixes, and only one of them
+    is a mistake at all.
+    """
+    if not cfg.tracker_path:
+        return UNSET, None
+    if not cfg.tracker_path.exists():
+        return MISSING, None
+    return FOUND, cfg.tracker_path.read_text()
 
 
 def _tracker_set(cfg, today):
     """Companies already in play: the active tracker sections, plus anyone whose
-    application closed recently enough to still be a live conversation."""
-    text = _tracker_text(cfg)
+    application closed recently enough to still be a live conversation.
+
+    A configured tracker that isn't on disk warns and returns nothing. The run
+    continues, because a missing tracker must not take down the radar — but it
+    must never be silent. Suppression failing quietly is exactly the failure
+    mode the closed-window rule exists to prevent, and one typo in settings.yaml
+    would otherwise cost every future run its suppression with no symptom.
+    """
+    state, text = _tracker_text(cfg)
+    if state is MISSING:
+        print(f"radar: WARNING — tracker configured as {cfg.tracker_path} but no file "
+              "is there, so NOTHING is being suppressed this run (fix `tracker:` in "
+              "settings.yaml, or set it to null if you don't keep one)")
     if text is None:
         return set()
     return (tracker_companies(text, cfg.tracker_active_sections)
@@ -63,8 +86,12 @@ def _tracker_set(cfg, today):
 
 
 def _check(cfg, fetch_fn) -> int:
-    text = _tracker_text(cfg)
-    if text is None:
+    state, text = _tracker_text(cfg)
+    if state is MISSING:
+        print(f"radar: --check needs the tracker, but no file is at {cfg.tracker_path} "
+              "(fix `tracker:` in settings.yaml, or move the file back)")
+        return 2
+    if state is UNSET:
         print("radar: --check needs a tracker — set `tracker:` in settings.yaml "
               "to a markdown file of your applications")
         return 2
