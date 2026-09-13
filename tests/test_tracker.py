@@ -6,7 +6,11 @@ file describes a real search.
 """
 import datetime
 
-from engine.radar.tracker import closed_recent_companies, tracker_companies
+from engine.radar.tracker import (
+    closed_recent_companies,
+    tracker_companies,
+    tracker_suppresses,
+)
 
 ACTIVE = {"active", "drafted but not applied"}
 TODAY = datetime.date(2026, 9, 13)
@@ -124,3 +128,31 @@ def test_closed_row_dated_exactly_on_the_window_edge_still_suppresses():
         "| Company | Role | Date closed | Outcome |\n|---|---|---|---|\n"
         "| Cobalt Grid | Data Engineer | 2026-06-15 | Closed |\n")
     assert closed_recent_companies(text, TODAY, 90) == {"cobalt grid"}
+
+
+# --- name matching ----------------------------------------------------------
+
+def test_tracker_suppresses_normalized_annotation():
+    # A tracker cell carries notes the scrape never will.
+    assert tracker_suppresses("Cobalt Grid", {"cobalt grid (via referral)"})
+
+
+def test_tracker_suppresses_substring_either_direction():
+    assert tracker_suppresses("Harborlight Data, Inc.", {"harborlight data"})
+    assert tracker_suppresses("Tessellate", {"tessellate labs"})
+
+
+def test_tracker_suppresses_is_case_insensitive():
+    assert tracker_suppresses("PINECREST SOFTWARE", {"Pinecrest Software"})
+
+
+def test_tracker_suppresses_ignores_short_cells():
+    # A two-character tracker cell must not cause degenerate substring matches.
+    assert not tracker_suppresses("Meridian Rows", {"me"})
+
+
+def test_tracker_suppresses_rejects_unrelated_and_empty_names():
+    assert not tracker_suppresses("Quarry Systems", {"cobalt grid"})
+    assert not tracker_suppresses("", {"cobalt grid"})
+    assert not tracker_suppresses(None, {"cobalt grid"})
+    assert not tracker_suppresses("Cobalt Grid", set())
