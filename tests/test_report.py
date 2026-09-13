@@ -81,13 +81,12 @@ def test_render_sorts_by_score_and_carries_frontmatter():
     assert DAY in out
 
 
-def test_render_frontmatter_reader_is_generic_not_tool_specific():
-    # The report is read by whoever runs the radar; it must not name one
-    # person's workflow or their vault.
-    out = render_report([make_report_row()], [], DAY)
-    head = out.split("---")[1]
-    assert "read_by:" in head
-    assert "/daily" not in out and "vault" not in out.lower()
+def test_render_frontmatter_reader_is_generic():
+    # The report is read by whoever runs the radar, so the reader line names a
+    # review session in the abstract and never one person's tooling or notes.
+    head = render_report([make_report_row()], [], DAY).split("---")[1]
+    assert [line for line in head.splitlines() if line.startswith("read_by:")] == [
+        "read_by: your daily review session"]
 
 
 def test_render_counts_survivors_and_kills_in_the_header():
