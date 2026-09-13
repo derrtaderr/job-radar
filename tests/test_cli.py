@@ -177,22 +177,21 @@ def test_check_without_a_tracker_configured_explains_itself(tmp_path, capsys):
     assert "tracker" in capsys.readouterr().out.lower()
 
 
+def _no_scrape_module():
+    raise ImportError("No module named 'engine.radar.scrape'")
+
+
 def test_check_reports_a_missing_scrape_module_clearly(tmp_path, capsys, monkeypatch):
     # --check needs the network adapter, which ships with the scrape module. If
-    # that module isn't there, say so plainly rather than dying on a traceback.
-    import builtins
-    real_import = builtins.__import__
-
-    def no_scrape(name, *args, **kwargs):
-        if name == "engine.radar.scrape" or name.endswith(".scrape"):
-            raise ImportError("No module named 'engine.radar.scrape'")
-        return real_import(name, *args, **kwargs)
+    # that module can't be imported, say so plainly rather than dying on a
+    # traceback the reader has to decode.
+    import engine.radar.cli as cli
 
     tracker = tmp_path / "tracker.md"
     tracker.write_text("## Active\n\n| Company | Role | Source |\n|---|---|---|\n"
                        "| Cobalt Grid | Data Engineer | (https://example.com/jobs/view/1) |\n")
     cfg_dir = _config(tmp_path, tracker="./tracker.md")
-    monkeypatch.setattr(builtins, "__import__", no_scrape)
+    monkeypatch.setattr(cli, "_scrape_module", _no_scrape_module)
 
     code = main(["--config", str(cfg_dir), "--check"])
     assert code != 0
@@ -200,16 +199,10 @@ def test_check_reports_a_missing_scrape_module_clearly(tmp_path, capsys, monkeyp
 
 
 def test_run_reports_a_missing_scrape_module_clearly(tmp_path, capsys, monkeypatch):
-    import builtins
-    real_import = builtins.__import__
-
-    def no_scrape(name, *args, **kwargs):
-        if name == "engine.radar.scrape" or name.endswith(".scrape"):
-            raise ImportError("No module named 'engine.radar.scrape'")
-        return real_import(name, *args, **kwargs)
+    import engine.radar.cli as cli
 
     cfg_dir = _config(tmp_path)
-    monkeypatch.setattr(builtins, "__import__", no_scrape)
+    monkeypatch.setattr(cli, "_scrape_module", _no_scrape_module)
 
     code = main(["--config", str(cfg_dir)])
     assert code != 0
