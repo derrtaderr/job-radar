@@ -183,3 +183,48 @@ def test_bump_followup_names_the_application_in_cap_error(tmp_path):
 
     with pytest.raises(FollowupCapError, match="acme-data-engineer"):
         bump_followup(dest)
+
+
+# --- frontmatter parsing edge cases (pinned, behavior already correct) -----
+# _parse_frontmatter splits on the FIRST colon only (str.partition), so a
+# value that itself contains a colon must survive a full round trip rather
+# than getting truncated at its own embedded ":".
+
+def test_frontmatter_value_with_colon_round_trips(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path, slug="acme-revops")
+    archive_dir = tmp_path / "archive"
+    dest = archive_application(apply_dir, archive_dir, _meta(role="RevOps: Growth"))
+
+    assert read_outcome(dest)["role"] == "RevOps: Growth"
+
+    bump_followup(dest)
+    assert read_outcome(dest)["role"] == "RevOps: Growth"
+
+
+def test_unknown_frontmatter_key_survives_append_log_and_bump_followup(tmp_path):
+    # An unknown key (e.g. added by hand, or by a future feature this module
+    # doesn't know about) must not be dropped or reordered by either write
+    # path — append_log and bump_followup only ever touch the field they
+    # own.
+    apply_dir = _make_apply_dir(tmp_path)
+    archive_dir = tmp_path / "archive"
+    dest = archive_application(apply_dir, archive_dir, _meta())
+
+    path = dest / "outcome.md"
+    text = path.read_text().replace("followups: 0\n---", "followups: 0\nsource: outbound\n---")
+    path.write_text(text)
+
+    expected_prefix = ["company: Acme Corp", "role: Data Engineer", "applied: 2026-09-13"]
+
+    append_log(dest, "2026-09-20", "sent followup #1")
+    outcome = read_outcome(dest)
+    assert outcome["source"] == "outbound"
+    fm_lines = path.read_text().splitlines()
+    assert fm_lines[1:6] == expected_prefix + ["followups: 0", "source: outbound"]
+
+    bump_followup(dest)
+    outcome = read_outcome(dest)
+    assert outcome["source"] == "outbound"
+    assert outcome["followups"] == 1
+    fm_lines = path.read_text().splitlines()
+    assert fm_lines[1:6] == expected_prefix + ["followups: 1", "source: outbound"]
