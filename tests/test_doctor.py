@@ -243,3 +243,38 @@ def test_hook_check_never_writes_git_config(tmp_path):
         ["git", "config", "--get", "core.hooksPath"],
         cwd=repo, capture_output=True, text=True)
     assert result.returncode != 0  # still unset — doctor never set it
+
+
+# --- check 7: gitignore integrity --------------------------------------------
+
+def test_gitignore_ok_when_every_required_line_present(tmp_path):
+    repo = _git_repo(tmp_path)  # writes all GITIGNORE_REQUIRED_LINES
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "gitignore integrity")
+    assert result.ok is True
+
+
+def test_gitignore_fails_and_names_the_exact_missing_line(tmp_path):
+    lines = [l for l in doctor.GITIGNORE_REQUIRED_LINES if l != "archive/"]
+    repo = _git_repo(tmp_path, gitignore_lines=lines)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "gitignore integrity")
+    assert result.ok is False
+    assert "archive/" in result.detail
+
+
+def test_gitignore_fails_naming_every_missing_line_when_several_gone(tmp_path):
+    repo = _git_repo(tmp_path, gitignore_lines=["config/"])
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "gitignore integrity")
+    assert result.ok is False
+    for line in doctor.GITIGNORE_REQUIRED_LINES:
+        if line != "config/":
+            assert line in result.detail
+
+
+def test_gitignore_fails_when_file_does_not_exist(tmp_path):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    results = doctor.run_checks(tmp_path, _config_dir(tmp_path))
+    result = _result(results, "gitignore integrity")
+    assert result.ok is False
