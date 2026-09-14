@@ -82,6 +82,13 @@ def _optional_path_str(data: dict, key: str, where: str, default: str) -> str:
         return default
     if not isinstance(value, str):
         raise ConfigError(f"{key!r} in {where} must be a string, got {value!r}")
+    # An empty (or whitespace-only) value means "not set", matching how
+    # `tracker: ''` already resolves via `or None`. Returning it verbatim
+    # instead would resolve the path to the CONFIG'S PARENT directory, which
+    # for archive_dir makes the whole repo root the archive and every sibling
+    # folder read as an archived application.
+    if not value.strip():
+        return default
     return value
 
 
