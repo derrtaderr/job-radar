@@ -40,7 +40,8 @@ cp -r config.example config
 **`.venv/bin/python tools/demo.py`** — see the whole system run on fictional data before
 touching your own config: a full radar pass, a compiled and verified resume/cover letter, and
 a calibration report, all against `config.example`'s invented persona, written to `demo-out/`
-and nothing sent anywhere.
+and nothing sent anywhere. Re-running reuses the same directory; the demo refuses to clear a
+directory it didn't create.
 
 Between the copy and the first run, fill in `config/`. Two ways: run **`/setup`** in a
 Claude Code session at the repo root, which runs the doctor first and then interviews you
