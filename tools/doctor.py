@@ -203,6 +203,27 @@ def _check_privacy_hook(repo_root: Path) -> CheckResult:
     return CheckResult("privacy hook", True, "core.hooksPath is .githooks", "")
 
 
+def _check_gitignore(repo_root: Path) -> CheckResult:
+    gitignore_path = repo_root / ".gitignore"
+    if not gitignore_path.exists():
+        return CheckResult(
+            "gitignore integrity", False,
+            f"{gitignore_path} does not exist",
+            f"create {gitignore_path} with: " + ", ".join(GITIGNORE_REQUIRED_LINES))
+
+    lines = {line.strip() for line in gitignore_path.read_text().splitlines()}
+    missing = [line for line in GITIGNORE_REQUIRED_LINES if line not in lines]
+    if missing:
+        return CheckResult(
+            "gitignore integrity", False,
+            f"{gitignore_path} is missing: {', '.join(missing)}",
+            f"add to {gitignore_path}: {', '.join(missing)}")
+
+    return CheckResult(
+        "gitignore integrity", True,
+        f"{gitignore_path} has all {len(GITIGNORE_REQUIRED_LINES)} required lines", "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -222,4 +243,5 @@ def run_checks(repo_root, config_dir) -> list:
         _check_config(config_dir, config_error),
         _check_profile(config_dir, config_error),
         _check_privacy_hook(repo_root),
+        _check_gitignore(repo_root),
     ]
