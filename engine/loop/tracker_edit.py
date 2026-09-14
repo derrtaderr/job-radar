@@ -84,6 +84,31 @@ def _join(lines: list, trailing_newline: bool) -> str:
     return "\n".join(lines) + ("\n" if trailing_newline else "")
 
 
+def _find_one_match(rows, company, role, section_key):
+    """Exactly one row whose Company and Role both normalize (annotation
+    stripped, lowercased — tracker_suppresses's own rule) to the given
+    values. Zero or more than one is a TrackerEditError naming what was
+    actually found, never a silent first-match guess."""
+    target_company = _normalize_tracker_cell(company)
+    target_role = _normalize_tracker_cell(role)
+    matches = [
+        row for row in rows
+        if _normalize_tracker_cell(row.get("Company")) == target_company
+        and _normalize_tracker_cell(row.get("Role")) == target_role
+    ]
+    if not matches:
+        raise TrackerEditError(
+            f"no row found for {company!r} / {role!r} in "
+            f"{_section_title(section_key)} section")
+    if len(matches) > 1:
+        lines = ", ".join(str(m.line) for m in matches)
+        raise TrackerEditError(
+            f"ambiguous match: {len(matches)} rows found for {company!r} / "
+            f"{role!r} in {_section_title(section_key)} section "
+            f"(lines {lines})")
+    return matches[0]
+
+
 def add_row(text: str, section: str, values: dict) -> str:
     """Append one row to `section`'s table, right after its last existing
     line. Cells are ordered by that table's OWN headers; a header with no
@@ -100,4 +125,46 @@ def add_row(text: str, section: str, values: dict) -> str:
     last_line = _last_table_line(text, key)
     lines, trailing_newline = _splitlines_and_trailing_newline(text)
     lines.insert(last_line, new_line)
+    return _join(lines, trailing_newline)
+
+
+def move_row(text: str, company: str, role: str, from_section: str,
+             to_section: str, extra: dict) -> str:
+    """Move one row from `from_section` to `to_section`. Finds exactly one
+    row matching Company+Role (annotation-tolerant); zero or multiple
+    matches is a TrackerEditError naming what was found. Columns shared by
+    name between the two tables carry the source row's values across;
+    `extra` supplies target-only columns (e.g. Active's Stage/Last touch
+    when moving in from Drafted); columns that exist only in the source
+    table are dropped — they lived their life there."""
+    extra = extra or {}
+    from_key = _normalize_section_key(from_section)
+    to_key = _normalize_section_key(to_section)
+    sections = parse_tracker(text)
+    from_table = _require_section(sections, from_key)
+    to_table = _require_section(sections, to_key)
+    _require_known_keys(extra.keys(), to_table.headers, to_key)
+
+    matched = _find_one_match(from_table.rows, company, role, from_key)
+
+    from_header_lower = {h.lower() for h in from_table.headers}
+    extra_lower = {k.lower() for k in extra}
+    values = dict(extra)
+    for h in to_table.headers:
+        if h.lower() in extra_lower:
+            continue  # extra already supplies this target-only column
+        if h.lower() in from_header_lower:
+            values[h] = matched.get(h) or ""
+    new_line = _row_text(_build_row_cells(to_table.headers, values))
+
+    remove_idx = matched.line - 1
+    insert_after_idx = _last_table_line(text, to_key) - 1
+
+    lines, trailing_newline = _splitlines_and_trailing_newline(text)
+    del lines[remove_idx]
+    if remove_idx < insert_after_idx:
+        # Removing an earlier line shifts everything after it up by one,
+        # including the target insertion point.
+        insert_after_idx -= 1
+    lines.insert(insert_after_idx + 1, new_line)
     return _join(lines, trailing_newline)
