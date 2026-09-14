@@ -58,6 +58,34 @@ def test_jd_keywords_orders_by_frequency_descending():
     assert keywords == ["docker", "redis", "python"]
 
 
+def test_jd_keywords_counts_sentence_final_and_mid_sentence_occurrences_together():
+    # A trailing sentence period must not fork "kubernetes." and "kubernetes"
+    # into separate tokens — this is the structural failure mode on real JD
+    # prose, where a term equally often lands mid-sentence and sentence-final.
+    jd = ("We need Kubernetes experience across the platform team. "
+          "Deep Kubernetes.")
+
+    keywords = ats_check.jd_keywords(jd)
+
+    assert "kubernetes" in keywords
+
+
+def test_jd_keywords_preserves_embedded_dots_like_node_js():
+    jd = "We ship Node.js services daily. Our whole backend runs Node.js."
+
+    keywords = ats_check.jd_keywords(jd)
+
+    assert "node.js" in keywords
+
+
+def test_jd_keywords_drops_a_token_that_is_too_short_after_stripping_trailing_dots():
+    jd = "This role touches AI. Some AI."
+
+    keywords = ats_check.jd_keywords(jd)
+
+    assert "ai" not in keywords
+
+
 def test_jd_keywords_respects_max_terms_cap():
     jd = " ".join(f"{term} {term}" for term in
                    ["alpha", "bravo", "charlie", "delta", "echo"])
