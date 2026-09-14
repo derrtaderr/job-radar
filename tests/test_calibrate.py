@@ -728,3 +728,85 @@ def test_the_seasons_two_proposals_survive_the_noise_floor(tmp_path):
     proposals = _section(report, "## Proposals")
     assert proposals.count("\n- ") == 2
     assert "`unlisted_comp_pts`" in proposals and "`rules`" in proposals
+
+
+# --- I3: framing must carry the signal, and the direction must read straight -
+
+def _result(spec_key, i_hits, i_n, n_hits, n_n):
+    from engine.loop.calibrate import CONTRASTS, ContrastResult
+    spec = next(s for s in CONTRASTS if s.key == spec_key)
+    return ContrastResult(spec=spec, interviewed_hits=i_hits, interviewed_n=i_n,
+                          negative_hits=n_hits, negative_n=n_n)
+
+
+def test_framing_leads_with_the_rarer_polarity(tmp_path):
+    # Remote language present in 1 of 6 vs 0 of 7. The PRESENT polarity is the
+    # rare one (avg 8%), so it carries the signal; the absent polarity is
+    # near-universal (avg 92%) and says almost nothing about either group.
+    result = _result("remote", 1, 6, 0, 7)
+    assert result.evidence() == (
+        "1 of 6 interviewed applications had remote language in the JD, "
+        "vs 0 of 7 negative-outcome")
+
+
+def test_framing_flips_when_the_present_polarity_is_the_common_one(tmp_path):
+    # Remote language in 6 of 6 and 7 of 7: present is universal (avg 100%),
+    # so the absent polarity is the rarer, more discriminating framing.
+    result = _result("remote", 6, 6, 7, 7)
+    assert result.evidence().startswith(
+        "0 of 6 interviewed applications had no remote language in the JD")
+
+
+def test_a_cell_quoted_at_100_percent_carries_its_n(tmp_path):
+    # A sentence a human quotes in isolation must not hide its base. The
+    # document carries the counts; the quoted claim has to carry them too.
+    result = _result("remote", 6, 6, 0, 7)
+    assert result.evidence() == (
+        "6 of 6 interviewed applications (N=6) had remote language in the JD, "
+        "vs 0 of 7 negative-outcome")
+
+
+def test_a_100_percent_cell_on_the_other_side_also_carries_its_n(tmp_path):
+    result = _result("remote", 0, 6, 7, 7)
+    assert "7 of 7 negative-outcome (N=7)" in result.evidence()
+
+
+def test_the_suggestion_direction_reads_straight_from_the_evidence(tmp_path):
+    # The reader must not have to invert anything. Comp listed tracks with
+    # interviews, and the sentence says in so many words what that implies
+    # for the unlisted score.
+    _, report = _report(tmp_path)
+    proposals = _section(report, "## Proposals")
+    assert (
+        "- `weights.yaml`: consider lowering `unlisted_comp_pts` — "
+        "5 of 6 interviewed applications had comp listed in the JD, "
+        "vs 1 of 7 negative-outcome, so an unlisted posting scores further "
+        "below a listed one (69-point gap vs a 33-point bar at these Ns, "
+        "floor N=5)." in proposals)
+
+
+def test_the_kill_proposal_leads_with_the_rare_present_polarity(tmp_path):
+    # Kill-rule language is present in 0 of 6 interviewed and 5 of 7 negative,
+    # so present (avg 36%) is the rarer polarity and leads with the negative
+    # side. Previously this quoted the least-discriminating cell — "6 of 6
+    # interviewed had NO kill-rule language" — which is true of almost every
+    # posting and therefore says nothing.
+    _, report = _report(tmp_path)
+    proposals = _section(report, "## Proposals")
+    assert (
+        "- `rules.yaml`: consider tightening `rules` — "
+        "5 of 7 negative-outcome applications had kill-rule language in the "
+        "JD, vs 0 of 6 interviewed, so these patterns kill more of what goes "
+        "nowhere (71-point gap vs a 33-point bar at these Ns, floor N=5)."
+        in proposals)
+
+
+def test_evidence_never_quotes_a_bare_100_percent_claim(tmp_path):
+    # Belt and braces across the whole season report: every "N of N" cell in
+    # a proposal carries its base.
+    import re
+    _, report = _report(tmp_path)
+    for line in _section(report, "## Proposals").splitlines():
+        for hits, total in re.findall(r"(\d+) of (\d+)", line):
+            if hits == total and hits != "0":
+                assert f"(N={total})" in line, line
