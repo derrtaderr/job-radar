@@ -24,8 +24,10 @@ git config core.hooksPath .githooks
 # committing config/ — your search criteria, salary floor, excluded employers.
 
 cp -r config.example config
-# ONLY if config/ doesn't exist yet. It's gitignored, so a cp -r over a populated
-# one destroys judgment no `git checkout` brings back.
+# ONLY if config/ doesn't exist yet. Run it over a populated one and cp doesn't
+# overwrite your judgment — it NESTS, dropping a second copy at
+# config/config.example/ that nothing in this repo reads. Your real files stay
+# untouched; delete config/config.example to clean up the junk copy.
 
 .venv/bin/python tools/doctor.py
 # nine checks: python, venv, jobspy, typst, config, profile, the privacy hook,
@@ -56,6 +58,9 @@ loads perfectly and is a fictional data engineer's search.
 field and what the loader does when it's wrong, the tracker format contract, how templates
 register, how the archive is laid out, and troubleshooting keyed to the exact strings the
 doctor prints.
+
+**[DESIGN.md](DESIGN.md)** is the why: the three subsystems, the boundaries deliberately
+kept between them, and the reasoning behind the honesty rules below.
 
 **Run every command from the repo root.** Paths inside `/setup`, `/apply`,
 `/add-template`, `/outcome`, `/followup` and every tool under `tools/` are repo-relative
