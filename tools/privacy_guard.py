@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b", re.I)
-PHONE = re.compile(r"(?<![\d.:/-])(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}(?![\d.])")
+PHONE = re.compile(r"(?<![\d.:/-])(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}(?!\.?\d)")
 SKIP_SUFFIXES = {".png", ".jpg", ".gif", ".pdf", ".woff", ".woff2", ".ico"}
 # Exact relative paths (as reported by `git ls-files`), never a bare basename —
 # a basename match would let ANY file named e.g. test_privacy_guard.py
