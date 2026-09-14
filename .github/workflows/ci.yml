@@ -16,3 +16,5 @@ jobs:
         run: |
           cp -r config.example config
           python radar.py --dry-run --config config
+      - name: offline demo (whole system on fictional data — typst is present here, so the full path runs)
+        run: python tools/demo.py --out demo-ci
