@@ -35,7 +35,9 @@ Three ways to invoke `radar.py`:
   applies your kill rules and scoring, and writes today's day folder.
 - **`python radar.py --check`** — re-checks the postings your tracker says you're
   waiting on, so you don't spend an application hour on a role that already
-  closed. Requires `tracker:` set in `config/settings.yaml`.
+  closed. Requires `tracker:` set in `config/settings.yaml`. Closed-application
+  suppression only reads a section literally headed `## Closed` — a
+  differently-named section (e.g. `## Archive`) is never read.
 - **`python radar.py --dry-run`** — loads the config and runs the pipeline on
   zero rows, writing nothing. The smoke test: proves your config is valid
   without touching the network or the filesystem.
