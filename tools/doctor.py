@@ -37,7 +37,6 @@ from engine.radar.config import ConfigError, load_config
 
 MIN_PYTHON = (3, 11)
 REQUIRED_PACKAGES = ("pypdf", "yaml")
-OPTIONAL_PACKAGES = ("jobspy",)
 
 GITIGNORE_REQUIRED_LINES = (
     "config/",
