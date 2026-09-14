@@ -873,3 +873,80 @@ def test_cli_accepts_min_n_of_one(tmp_path, capsys):
                  "--min-n", "1"])
 
     assert code == 0
+
+
+# --- C1 (second pass): an EXACT-match tie is an ambiguity too ---------------
+
+def test_two_exact_archives_for_one_row_is_ambiguous_not_a_slug_order_guess(tmp_path):
+    # A reapplication archived twice: same company, same role, two slug dirs.
+    # Both are EXACT-equal to the one Closed row, so nothing in the data says
+    # which of them that row's outcome belongs to. Taking the first in slug
+    # order is the same coin-flip the soft-match branch was fixed for — it
+    # just wore an exact match, so it looked principled.
+    _archive(tmp_path, "cobalt-grid-data-engineer-a", "Cobalt Grid",
+             "Data Engineer", jd="Base salary range is $165,000 per year.\n")
+    _archive(tmp_path, "cobalt-grid-data-engineer-b", "Cobalt Grid",
+             "Data Engineer", jd="Compensation is competitive.\n")
+
+    rows = outcome_classes(_one("Offer"))["offer"]
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert joined == []
+    assert len(unjoined) == 1
+    assert len(ambiguous) == 1
+    assert ambiguous[0].row is unjoined[0]
+    assert sorted(ambiguous[0].candidates) == [
+        "cobalt-grid-data-engineer-a", "cobalt-grid-data-engineer-b"]
+
+
+def test_an_exact_tie_is_named_in_the_report_header(tmp_path):
+    from engine.loop.calibrate import calibration_report
+    from engine.radar.config import load_config
+    from tests.fixtures_season import build_config
+
+    _archive(tmp_path, "cobalt-grid-data-engineer-a", "Cobalt Grid", "Data Engineer")
+    _archive(tmp_path, "cobalt-grid-data-engineer-b", "Cobalt Grid", "Data Engineer")
+
+    cfg = load_config(build_config(tmp_path))
+    summary = _section(
+        calibration_report(_one("Offer"), tmp_path / "archive", cfg),
+        "## Summary")
+
+    assert "Ambiguous" in summary
+    assert "Cobalt Grid / Data Engineer" in summary
+    assert "cobalt-grid-data-engineer-a" in summary
+    assert "cobalt-grid-data-engineer-b" in summary
+
+
+def test_two_rows_and_two_exact_archives_are_both_ambiguous(tmp_path):
+    # The consequence of the rule, stated so it is a decision and not a
+    # surprise: company+role alone cannot say which archive belongs to which
+    # application, so a genuine reapplication archived twice reports two
+    # ambiguities rather than pairing them off by slug order.
+    _archive(tmp_path, "tessellate-data-engineer-2026-03", "Tessellate", "Data Engineer")
+    _archive(tmp_path, "tessellate-data-engineer-2026-08", "Tessellate", "Data Engineer")
+
+    rows = outcome_classes(_closed(
+        "Tessellate | Data Engineer | 2026-04-02 | Rejected at screen | n/a | n/a",
+        "Tessellate | Data Engineer | 2026-08-20 | Offer | n/a | n/a"))
+    ordered = rows["rejected-at-screen"] + rows["offer"]
+
+    joined, unjoined, ambiguous = join_archives(ordered, tmp_path / "archive")
+
+    assert joined == []
+    assert len(unjoined) == 2 and len(ambiguous) == 2
+
+
+def test_one_exact_archive_still_joins_when_others_merely_soft_match(tmp_path):
+    # The tie rule must not fire on a single exact match sitting alongside
+    # soft-matching neighbours — exact still wins outright there.
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    _archive(tmp_path, "widget-co-analytics-data-engineer",
+             "Widget Co", "Analytics Data Engineer")
+
+    rows = outcome_classes(_closed(
+        "Widget Co | Data Engineer | 2026-05-01 | Offer | n/a | n/a"))["offer"]
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and unjoined == [] and ambiguous == []
+    assert joined[0].archive.name == "widget-co-data-engineer"
