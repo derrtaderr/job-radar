@@ -24,3 +24,7 @@ templates/custom/
 # data — resumes, cover letters, JD text, outcome logs. Never committable
 # by accident, same rule as apply-out/ above.
 archive/
+
+# tools/demo.py's default output — fictional data only, but it's a scratch
+# tree regenerated on every run, not something to track.
+demo-out/
