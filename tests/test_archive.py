@@ -56,6 +56,23 @@ def test_archive_application_copies_all_files(tmp_path):
     assert (dest / "outcome.md").exists()
 
 
+def test_archive_application_copies_subdirectories_recursively(tmp_path):
+    # A live extras/ subdir under apply_dir (e.g. saved job-posting screenshots
+    # or research notes) must not vanish with zero signal when archived — the
+    # archive is supposed to be a faithful record of what was applied with.
+    apply_dir = _make_apply_dir(tmp_path)
+    (apply_dir / "extras").mkdir()
+    (apply_dir / "extras" / "notes.md").write_text("Fictional prep notes for Acme Corp.\n")
+    (apply_dir / "extras" / "nested").mkdir()
+    (apply_dir / "extras" / "nested" / "deep.txt").write_text("still here\n")
+    archive_dir = tmp_path / "archive"
+
+    dest = archive_application(apply_dir, archive_dir, _meta())
+
+    assert (dest / "extras" / "notes.md").read_text() == "Fictional prep notes for Acme Corp.\n"
+    assert (dest / "extras" / "nested" / "deep.txt").read_text() == "still here\n"
+
+
 def test_archive_application_writes_frontmatter_from_meta(tmp_path):
     apply_dir = _make_apply_dir(tmp_path)
     archive_dir = tmp_path / "archive"
