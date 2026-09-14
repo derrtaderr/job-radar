@@ -44,7 +44,7 @@ def pipeline(raw_rows, state, cfg, tracker_set, today):
     for r in raw_rows:
         jid = str(r.get("id") or r.get("job_url"))
         url = r.get("job_url")
-        if jid in state or url in seen_urls:
+        if jid in state or (url and url in seen_urls):
             continue
         if excluded(r.get("company"), cfg.exclusions):
             continue
@@ -59,7 +59,8 @@ def pipeline(raw_rows, state, cfg, tracker_set, today):
             continue
 
         seen_pairs.add(pair)
-        seen_urls.add(url)
+        if url:
+            seen_urls.add(url)
         new_state[jid] = str(today)
 
         flags = kill_flags(r, cfg)

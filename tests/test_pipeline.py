@@ -75,6 +75,18 @@ def test_pipeline_dedups_same_company_and_title_within_one_run():
     assert set(new_state) == {"a"}
 
 
+def test_pipeline_does_not_collide_rows_with_no_job_url():
+    # A None job_url must never be treated as a "seen" URL — two distinct
+    # postings that both lack a URL are not duplicates of each other, and the
+    # second one silently disappearing is the bug this guards against.
+    raw = [make_row(id="a", job_url=None, company="Cobalt Grid"),
+           make_row(id="b", job_url=None, company="Harborlight Data")]
+    survivors, _, new_state = pipeline(raw, state={}, cfg=CFG,
+                                       tracker_set=set(), today=TODAY)
+    assert [r["company"] for r in survivors] == ["Cobalt Grid", "Harborlight Data"]
+    assert set(new_state) == {"a", "b"}
+
+
 def test_pipeline_dedups_by_url_within_one_run():
     raw = [make_row(id="a", job_url="https://example.com/jobs/view/1",
                     company="Cobalt Grid"),
