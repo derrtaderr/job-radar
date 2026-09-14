@@ -531,6 +531,39 @@ def test_add_row_accepts_both_cells_populated():
     assert "| Tessellate | Data Engineer | Applied | 2026-09-13 |" in out
 
 
+# --- trailing-backslash cells: a value ending in "\" would swallow the ------
+# next cell's boundary pipe when the row is re-parsed (tracker_schema's
+# _split_row treats a pipe preceded by "\" as an escaped literal, not a
+# column boundary). Refusing with a named TrackerEditError, rather than
+# silently escaping it into some other form, keeps the round-trip contract
+# simple: whatever gets written is exactly what re-parses back out, or the
+# write never happens.
+
+def test_add_row_refuses_a_value_ending_in_a_trailing_backslash():
+    with pytest.raises(TrackerEditError, match=r"backslash"):
+        add_row(VALID_TRACKER, "research", {
+            "Company": "Solace Systems", "Notes": "C:\\path\\",
+        })
+
+
+def test_touch_row_refuses_a_value_ending_in_a_trailing_backslash():
+    with pytest.raises(TrackerEditError, match=r"backslash"):
+        touch_row(VALID_TRACKER, "active", "Cobalt Grid",
+                  "Data Platform Engineer", "Notes", "trailing slash\\")
+
+
+def test_add_row_accepts_a_value_with_a_non_trailing_backslash():
+    # The refusal is specific to a TRAILING backslash (the one that would
+    # actually collide with the next cell's boundary pipe) — a backslash
+    # anywhere else in the value is unaffected.
+    new_text = add_row(VALID_TRACKER, "research", {
+        "Company": "Solace Systems", "Notes": "C:\\path\\to\\thing",
+    })
+    sections = parse_tracker(new_text)
+    new_row = sections["research"].rows[-1]
+    assert new_row["Notes"] == "C:\\path\\to\\thing"
+
+
 def test_add_row_does_not_gate_sections_without_those_columns():
     # The rule protects rows that must stay findable by Company+Role. A table
     # that has no such columns is not that shape and must not be blocked.
