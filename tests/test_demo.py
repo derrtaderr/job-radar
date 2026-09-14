@@ -163,6 +163,25 @@ def test_refuses_to_clear_a_directory_it_did_not_create(tmp_path, capsys):
     assert not (out_dir / "config").exists()
 
 
+def test_refuses_when_out_points_at_an_existing_file(tmp_path, capsys):
+    # --out resolving to a plain file (not a directory) used to fail closed
+    # but ugly: _reset_out_dir's `out_dir.iterdir()` raises a raw
+    # NotADirectoryError, which surfaces as an unhandled traceback instead of
+    # the named, exit-2 refusal every other bad --out gets.
+    out_path = tmp_path / "not-a-directory.txt"
+    out_path.write_text("i am a file, not a directory")
+
+    exit_code = demo.main(["--out", str(out_path)])
+
+    assert exit_code == 2
+    assert out_path.read_text() == "i am a file, not a directory"
+
+    captured = capsys.readouterr()
+    assert (f"--out points at {out_path.resolve()}, which is a file, not a "
+            "directory — pick an empty or new directory; nothing was "
+            "deleted") in captured.out
+
+
 def test_a_fresh_out_path_that_does_not_exist_yet_succeeds(tmp_path):
     out_dir = tmp_path / "brand-new"
     assert not out_dir.exists()
