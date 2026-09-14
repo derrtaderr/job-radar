@@ -69,6 +69,22 @@ def _require_int(data: dict, key: str, where: str) -> int:
     return value
 
 
+def _require_list(data: dict, key: str, where: str, *, allow_empty: bool = False) -> list:
+    # A scalar (`searches: Data Engineer` instead of a YAML sequence) loads as
+    # a plain str, and str is iterable — code downstream that expects "a list
+    # of query strings" would instead silently iterate its characters (one
+    # scrape query per letter). Reject anything that isn't a genuine list,
+    # every element of which is a string, up front and by name.
+    value = _require(data, key, where)
+    if not isinstance(value, list):
+        raise ConfigError(f"{key!r} in {where} must be a list, got {value!r}")
+    if not all(isinstance(v, str) for v in value):
+        raise ConfigError(f"{key!r} in {where} must be a list of strings, got {value!r}")
+    if not allow_empty and not value:
+        raise ConfigError(f"{key!r} in {where} must not be empty")
+    return value
+
+
 def _compile(pattern: str, where: str) -> "re.Pattern[str]":
     try:
         return re.compile(pattern, re.IGNORECASE)
@@ -110,8 +126,8 @@ def load_config(config_dir: Path) -> Config:
     settings_raw = _load_yaml(config_dir / "settings.yaml", "settings.yaml")
 
     # --- queries.yaml ---
-    queries = _require(queries_raw, "searches", "queries.yaml")
-    sites = _require(queries_raw, "sites", "queries.yaml")
+    queries = _require_list(queries_raw, "searches", "queries.yaml")
+    sites = _require_list(queries_raw, "sites", "queries.yaml")
     search_location = _require(queries_raw, "location", "queries.yaml")
     hours_old = _require_int(queries_raw, "hours_old", "queries.yaml")
     results_per_query = _require_int(queries_raw, "results_per_query", "queries.yaml")
@@ -163,7 +179,8 @@ def load_config(config_dir: Path) -> Config:
     state_file = (base / _require(settings_raw, "state_file", "settings.yaml")).resolve()
     tracker = settings_raw.get("tracker") or None
     tracker_path = (base / tracker).resolve() if tracker else None
-    tracker_active_sections = set(_require(settings_raw, "tracker_active_sections", "settings.yaml"))
+    tracker_active_sections = set(_require_list(
+        settings_raw, "tracker_active_sections", "settings.yaml", allow_empty=True))
     closed_window_days = _require_int(settings_raw, "closed_window_days", "settings.yaml")
 
     # --- exclusions.txt ---
