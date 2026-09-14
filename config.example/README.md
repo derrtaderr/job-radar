@@ -8,7 +8,18 @@ actual preferences.
 
 ## Use it
 
+**The guided way: run `/setup` in a Claude Code session at the repo root.** It checks the
+environment first, copies this folder for you, and then interviews you file by file — your
+career facts into `profile.md`, your target titles into `queries.yaml`, the roles you never
+want to see again into `rules.yaml` as named kill rules. Every pattern it writes gets read
+back to you in plain English before it lands. The rest of this file is the same work done by
+hand, and it is the reference `/setup` follows.
+
+By hand:
+
 1. Copy this whole folder to `config/` at the repo root: `cp -r config.example config`.
+   **Only if `config/` doesn't exist yet** — it is gitignored, so a `cp -r` over a populated
+   one destroys judgment that no `git checkout` brings back.
 2. Edit every file in `config/` to reflect your own search: your target titles and
    locations, your kill rules, your comp floor, your scoring weights, your output paths,
    your excluded companies.
