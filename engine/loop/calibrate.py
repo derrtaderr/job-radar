@@ -31,11 +31,12 @@ engine/draft/compile.py vs the `compile` builtin.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from engine.loop.archive import ArchiveError, read_outcome
-from engine.loop.tracker_schema import parse_tracker
+from engine.loop.tracker_schema import parse_tracker, tracker_check
 from engine.radar.tracker import _normalize_tracker_cell
 
 # Fixed bucket order. Every one is always a key in the returned dict, even
@@ -661,7 +662,33 @@ def contrast_results(joined, cfg) -> list:
     ]
 
 
-def _summary_lines(classes: dict, joined, unjoined, ambiguous, min_n: int) -> list:
+def _check_warning(tracker_text: str):
+    """One line naming a tracker that failed its own shape check, or None.
+
+    A row whose cell count disagrees with its header is read POSITIONALLY by
+    parse_tracker: every column past the break holds the value of its
+    neighbour, so an Outcome may really be a Reason and the classification is
+    quietly wrong. Calibration cannot detect that from the values — "n/a" is
+    a plausible Outcome and a plausible Reason.
+
+    It is a warning and never a refusal. This report edits nothing, and
+    declining to render it would withhold the one artifact that makes the
+    misalignment visible in the first place.
+    """
+    violations = tracker_check(tracker_text or "")
+    if not violations:
+        return None
+    rows = {m.group(1) for v in violations
+            if (m := re.match(r"line (\d+):", v))}
+    if rows:
+        return (f"{len(rows)} tracker rows failed check; their cells may be "
+                f"misaligned — run tracker_cli.py check")
+    return (f"{len(violations)} tracker problems failed check — "
+            f"run tracker_cli.py check")
+
+
+def _summary_lines(classes: dict, joined, unjoined, ambiguous, min_n: int,
+                   check_warning=None) -> list:
     total = sum(len(rows) for rows in classes.values())
     n_joined = len(joined)
     join_pct = _pct(_rate(n_joined, total))
@@ -673,9 +700,12 @@ def _summary_lines(classes: dict, joined, unjoined, ambiguous, min_n: int) -> li
     interviewed, negative = group_joined(joined)
     interviewed_n, negative_n = len(interviewed), len(negative)
 
-    lines = [
-        "## Summary",
-        "",
+    lines = ["## Summary", ""]
+    if check_warning:
+        # First thing in the body, deliberately. A caveat about whether the
+        # numbers mean what they say has to be read before the numbers.
+        lines += [check_warning, ""]
+    lines += [
         f"Closed applications: {total}",
         f"Joined to an archive: {n_joined} ({join_pct}%)",
         f"Unjoined (no archive match): {len(unjoined)}",
@@ -750,7 +780,8 @@ def calibration_report(tracker_text: str, archive_dir, cfg,
     results = contrast_results(joined, cfg)
 
     lines = ["# Calibration report", ""]
-    lines += _summary_lines(classes, joined, unjoined, ambiguous, min_n)
+    lines += _summary_lines(classes, joined, unjoined, ambiguous, min_n,
+                            check_warning=_check_warning(tracker_text))
 
     lines += [
         "",
