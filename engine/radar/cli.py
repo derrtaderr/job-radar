@@ -145,7 +145,10 @@ def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
     if args.dry_run:
         # The smoke test: prove the config loads and the pipeline runs, and
         # touch nothing. Zero rows here is expected, not a broken scrape.
-        survivors, killed, _ = pipeline([], {}, cfg, set(), today)
+        # Still call _tracker_set — a configured-but-missing tracker prints
+        # its WARNING there, and a smoke test that reports "config OK" while
+        # suppression is silently dead is worse than no smoke test at all.
+        survivors, killed, _ = pipeline([], {}, cfg, _tracker_set(cfg, today), today)
         print(f"radar: dry run — config OK ({len(cfg.queries)} queries, "
               f"{len(cfg.kill_rules)} kill rules), 0 rows in, "
               f"{len(survivors)} queued, {len(killed)} killed, nothing written")

@@ -161,6 +161,21 @@ def test_dry_run_exercises_config_and_pipeline_without_touching_disk(tmp_path, c
     assert not (cfg_dir / "state.json").exists()
 
 
+def test_dry_run_warns_loudly_when_the_configured_tracker_is_missing(tmp_path, capsys):
+    # A normal run prints this warning (see
+    # test_run_warns_loudly_when_the_configured_tracker_is_missing above) — a
+    # smoke test that says "config OK" while suppression is silently dead
+    # misleads exactly the person running it to sanity-check their setup.
+    cfg_dir = _config(tmp_path, tracker="./tracker.md")
+    assert main(["--config", str(cfg_dir), "--dry-run"]) == 0
+
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert str(tmp_path / "tracker.md") in out
+    assert "suppress" in out.lower()
+    assert "dry run" in out.lower()
+
+
 def test_dry_run_never_scrapes(tmp_path):
     def boom(cfg):
         raise AssertionError("dry run must not scrape")
