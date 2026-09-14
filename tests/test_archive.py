@@ -118,6 +118,131 @@ def test_archive_application_refuses_existing_slug(tmp_path):
     assert (archive_dir / "acme-data-engineer" / "outcome.md").exists()
 
 
+# --- archive_application: all-or-nothing --------------------------------
+#
+# The slug directory is what "this application was archived" MEANS — it is
+# what /outcome's recovery text keys off, and what the calibration join
+# looks for. So a failed archive must leave no slug directory at all.
+# Creating the destination first and copying into it gets this backwards:
+# the copy dies partway, an empty (or half-filled) husk survives, and every
+# retry from then on hits "already exists" — a permanent block on archiving
+# that application, caused by a failure that archived nothing.
+
+
+def test_a_failed_copy_leaves_no_slug_directory_behind(tmp_path):
+    # A dangling symlink in the apply-out folder — a resume symlinked to a
+    # file that has since been deleted. shutil.copy2 follows symlinks, so
+    # this fails mid-copy, after at least one file has already been copied.
+    apply_dir = _make_apply_dir(tmp_path)
+    (apply_dir / "zz-dangling.pdf").symlink_to(tmp_path / "gone.pdf")
+    archive_dir = tmp_path / "archive"
+
+    with pytest.raises(Exception):
+        archive_application(apply_dir, archive_dir, _meta())
+
+    assert not (archive_dir / "acme-data-engineer").exists()
+
+
+def test_a_failed_copy_leaves_the_retry_path_clear(tmp_path):
+    # The point of the rule above: once the cause is fixed, the SAME call
+    # must succeed. A husk would make this raise "already exists" forever.
+    apply_dir = _make_apply_dir(tmp_path)
+    (apply_dir / "zz-dangling.pdf").symlink_to(tmp_path / "gone.pdf")
+    archive_dir = tmp_path / "archive"
+
+    with pytest.raises(Exception):
+        archive_application(apply_dir, archive_dir, _meta())
+
+    (apply_dir / "zz-dangling.pdf").unlink()
+    dest = archive_application(apply_dir, archive_dir, _meta())
+
+    assert (dest / "outcome.md").exists()
+    assert (dest / "resume.pdf").read_bytes() == b"%PDF-fake-resume"
+
+
+def test_a_failed_copy_leaves_no_staging_directory_behind(tmp_path):
+    # Staging must clean up after itself too — a leftover .tmp directory
+    # inside archive_dir is litter the human has to reason about, and it
+    # would be counted by anything that lists the archive.
+    apply_dir = _make_apply_dir(tmp_path)
+    (apply_dir / "zz-dangling.pdf").symlink_to(tmp_path / "gone.pdf")
+    archive_dir = tmp_path / "archive"
+
+    with pytest.raises(Exception):
+        archive_application(apply_dir, archive_dir, _meta())
+
+    assert not archive_dir.exists() or list(archive_dir.iterdir()) == []
+
+
+def test_a_failed_archive_does_not_disturb_an_unrelated_sibling(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path)
+    archive_dir = tmp_path / "archive"
+    archive_application(apply_dir, archive_dir, _meta())
+
+    broken = _make_apply_dir(tmp_path, slug="beta-data-engineer")
+    (broken / "zz-dangling.pdf").symlink_to(tmp_path / "gone.pdf")
+    with pytest.raises(Exception):
+        archive_application(broken, archive_dir, _meta(company="Beta Corp"))
+
+    assert (archive_dir / "acme-data-engineer" / "outcome.md").exists()
+    assert not (archive_dir / "beta-data-engineer").exists()
+
+
+def test_missing_apply_dir_raises_archive_error_naming_it(tmp_path):
+    # The realistic cause: apply-out/ was cleared, or the slug was typed
+    # from memory. A bare FileNotFoundError reads as a bug in the tool; an
+    # ArchiveError naming the path reads as the one-line fix it is.
+    missing = tmp_path / "apply-out" / "acme-data-engineer"
+    archive_dir = tmp_path / "archive"
+
+    with pytest.raises(ArchiveError, match="acme-data-engineer"):
+        archive_application(missing, archive_dir, _meta())
+
+    assert not (archive_dir / "acme-data-engineer").exists()
+
+
+# --- outcome.md corruption: named, never a bare KeyError ----------------
+
+
+def test_read_outcome_names_the_file_when_followups_is_missing(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path)
+    dest = archive_application(apply_dir, tmp_path / "archive", _meta())
+    path = dest / "outcome.md"
+    path.write_text(path.read_text().replace("followups: 0\n", ""))
+
+    with pytest.raises(ArchiveError, match="followups"):
+        read_outcome(dest)
+
+
+def test_bump_followup_names_the_file_when_followups_is_missing(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path)
+    dest = archive_application(apply_dir, tmp_path / "archive", _meta())
+    path = dest / "outcome.md"
+    path.write_text(path.read_text().replace("followups: 0\n", ""))
+
+    with pytest.raises(ArchiveError, match="outcome.md"):
+        bump_followup(dest)
+
+
+def test_a_non_integer_followups_value_is_named_not_a_bare_value_error(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path)
+    dest = archive_application(apply_dir, tmp_path / "archive", _meta())
+    path = dest / "outcome.md"
+    path.write_text(path.read_text().replace("followups: 0", "followups: two"))
+
+    with pytest.raises(ArchiveError, match="two"):
+        read_outcome(dest)
+
+
+def test_missing_frontmatter_block_names_the_file(tmp_path):
+    apply_dir = _make_apply_dir(tmp_path)
+    dest = archive_application(apply_dir, tmp_path / "archive", _meta())
+    (dest / "outcome.md").write_text("## Log\n- 2026-09-13: applied\n")
+
+    with pytest.raises(ArchiveError, match="outcome.md"):
+        read_outcome(dest)
+
+
 # --- append_log: preserves prior lines ---------------------------------
 
 def test_append_log_preserves_prior_lines(tmp_path):
