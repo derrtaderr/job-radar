@@ -132,6 +132,65 @@ def test_never_sends_line_is_printed(tmp_path, capsys):
     assert demo.NEVER_SENDS_LINE in captured.out
 
 
+# --- --out safety: never destroy contents the demo didn't create ----------
+#
+# Found in review 2026-09-14: _reset_out_dir was an unconditional
+# shutil.rmtree on whatever --out resolved to. Pointing it at a directory
+# holding an unrelated file silently destroyed the file. A demo built for
+# strangers must never be destructive to their filesystem — the probe below
+# is the reviewer's exact case.
+
+def test_refuses_to_clear_a_directory_it_did_not_create(tmp_path, capsys):
+    out_dir = tmp_path / "out"
+    important = out_dir / "important_stuff"
+    important.mkdir(parents=True)
+    (important / "keep-me.txt").write_text("do not delete me")
+
+    exit_code = demo.main(["--out", str(out_dir)])
+
+    assert exit_code == 2
+    # Byte-for-byte survival — not just "the file still exists".
+    assert (important / "keep-me.txt").read_text() == "do not delete me"
+    assert sorted(p.name for p in out_dir.iterdir()) == ["important_stuff"]
+
+    captured = capsys.readouterr()
+    assert (f"--out points at {out_dir.resolve()}, which has contents this "
+            "demo did not create — pick an empty or new directory; nothing "
+            "was deleted") in captured.out
+
+    # Refused before anything else ran.
+    assert not (out_dir / "radar-out").exists()
+    assert not (out_dir / "config").exists()
+
+
+def test_a_fresh_out_path_that_does_not_exist_yet_succeeds(tmp_path):
+    out_dir = tmp_path / "brand-new"
+    assert not out_dir.exists()
+
+    assert demo.main(["--out", str(out_dir)]) == 0
+    assert (out_dir / demo.DEMO_SENTINEL).is_file()
+
+
+def test_an_empty_existing_directory_succeeds(tmp_path):
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    assert demo.main(["--out", str(out_dir)]) == 0
+    assert (out_dir / demo.DEMO_SENTINEL).is_file()
+
+
+def test_a_directory_from_a_prior_demo_run_is_reused_not_refused(tmp_path):
+    out_dir = tmp_path / "out"
+    first = demo.main(["--out", str(out_dir)])
+    assert first == 0
+    assert (out_dir / demo.DEMO_SENTINEL).is_file()
+
+    # A second run finds the sentinel this demo itself wrote and clears the
+    # directory rather than refusing — this is the normal rerun path.
+    second = demo.main(["--out", str(out_dir)])
+    assert second == 0
+
+
 def test_cli_subprocess_runs_clean_from_the_repo_root(tmp_path):
     out_dir = tmp_path / "out"
     result = subprocess.run(
