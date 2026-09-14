@@ -22,6 +22,14 @@ later attempt refuses as "already exists", permanently blocking an
 application from being archived on the strength of a failure that
 archived nothing.
 
+Scope, because "all-or-nothing" is easy to read as more than it is: the
+guarantee covers the SLUG DIRECTORY, not the temporary staging directory.
+An exception from the copy path itself (a permission error, a vanished
+source file, an OSError from shutil) propagates to the caller, and the
+staging directory it leaves behind is not cleaned up. No slug appears, so
+a retry still works and nothing is permanently blocked, but the archive
+root can accumulate stale staging directories after repeated failures.
+
 read_outcome/append_log/bump_followup are the read/write pair over that
 same file: append_log adds a dated log line without disturbing any other
 line (frontmatter or log), and bump_followup increments the `followups`

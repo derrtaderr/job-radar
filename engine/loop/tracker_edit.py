@@ -109,6 +109,43 @@ def _find_one_match(rows, company, role, section_key):
     return matches[0]
 
 
+# Sections where a row has to stay findable by Company+Role, because every
+# later edit to it (move, touch) matches on exactly those two cells. Same set
+# tracker_schema gates duplicates on, and for the same underlying reason.
+_IDENTITY_GATED_SECTIONS = {"active", "drafted but not applied"}
+_IDENTITY_COLUMNS = ("Company", "Role")
+
+
+def _require_identity_cells(headers, values: dict, key: str) -> None:
+    """Refuse an add that would write an unreachable row.
+
+    `add` builds its row from `values` alone — unlike `move`, it has no source
+    row to inherit Company and Role from — so nothing stops it writing a row
+    with both cells empty. `check` passes that row (it only requires the
+    COLUMNS to exist), and `move` and `touch` can then never match it again.
+    It is a row nobody can correct, created by a tool that reported success.
+    """
+    if key not in _IDENTITY_GATED_SECTIONS:
+        return
+    header_lower = {h.lower() for h in headers}
+    value_lower = {k.lower(): v for k, v in values.items()}
+    for column in _IDENTITY_COLUMNS:
+        if column.lower() not in header_lower:
+            continue  # not that shape of table; nothing to protect
+        cell = value_lower.get(column.lower())
+        if cell is None or not str(cell).strip():
+            raise TrackerEditError(
+                f"add to {section_title(key)!r} needs a non-empty {column!r} "
+                f"— a row without it can never be matched again by move or "
+                f"touch, and check will not catch it")
+
+
+def section_title(key: str) -> str:
+    return {"active": "Active"}.get(
+        key, " ".join(w.capitalize() if i == 0 else w
+                      for i, w in enumerate(key.split())))
+
+
 def add_row(text: str, section: str, values: dict) -> str:
     """Append one row to `section`'s table, right after its last existing
     line. Cells are ordered by that table's OWN headers; a header with no
@@ -119,6 +156,7 @@ def add_row(text: str, section: str, values: dict) -> str:
     sections = parse_tracker(text)
     table = _require_section(sections, key)
     _require_known_keys(values.keys(), table.headers, key)
+    _require_identity_cells(table.headers, values, key)
 
     new_line = _row_text(_build_row_cells(table.headers, values))
 
