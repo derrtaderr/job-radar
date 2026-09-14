@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """doctor — read-only environment and config health check for job-radar.
 
-Eight independent checks, each returning a CheckResult, so a stranger with a
+Nine independent checks, each returning a CheckResult, so a stranger with a
 half-set-up machine gets every failure at once instead of one at a time
-across eight runs. The doctor never writes anything, anywhere — including
-the git config read (check 6). It reads `git config core.hooksPath`, never
+across nine runs. The doctor never writes anything, anywhere — including
+the git config read (check 7). It reads `git config core.hooksPath`, never
 sets it; every fix it prints is a command the human runs, not one doctor.py
 runs for them.
 
@@ -253,7 +253,7 @@ def _check_tracker(config, config_error: "str | None") -> CheckResult:
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
-    """Run all eight checks and return their CheckResults, in order. Every
+    """Run all nine checks and return their CheckResults, in order. Every
     check runs independently — one failing never skips or hides another,
     except checks 5 and 8, which SKIP (not FAIL) when there's no loadable
     Config to check yet."""

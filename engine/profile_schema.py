@@ -3,7 +3,7 @@ to work: five frontmatter keys, five section headings, and the claim-ledger
 sentence that tells a stranger what the file is for.
 
 Shared by two readers that must never drift apart: tests/test_profile_example.py
-(pins the shipped config.example/profile.md) and tools/doctor.py check 5
+(pins the shipped config.example/profile.md) and tools/doctor.py check 6
 (validates whatever profile.md a person actually wrote in their own config/).
 One schema, read by both, never copied — a copy is exactly how the example
 and the doctor's idea of "valid" would quietly diverge.
