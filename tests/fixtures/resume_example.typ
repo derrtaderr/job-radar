@@ -48,4 +48,4 @@ through the marts finance and product teams query daily.
 Python, SQL, Airflow, dbt, Spark, Kafka, Snowflake, AWS (S3, Redshift, Lambda), Terraform, Git
 
 = Education
-B.S. Computer Science, University of Colorado Denver, 2019
+B.S. Computer Science, Ridgeline State University, 2019
