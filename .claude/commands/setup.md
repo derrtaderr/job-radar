@@ -532,6 +532,11 @@ Headers and separators only. No example rows — a template that ships with samp
 tracker whose first three applications are fictional companies, and `/outcome` will happily edit
 them.
 
+Once a row exists, put the posting's URL in its Notes cell — `radar.py --check` scans the whole
+row for the first `http(s)` URL it finds, so any cell works, but Notes is the one built for free
+text. Tell the human this now, while the template is on the table, or `--check` has nothing to
+re-check on their first Active row.
+
 The spellings are load-bearing. `Last touch` and `Date closed` must carry ISO dates when filled.
 Confirm it parses:
 

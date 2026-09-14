@@ -78,10 +78,11 @@ and assume that working directory.
 .venv/bin/python radar.py --check      # re-check the postings your tracker is waiting on
 ```
 
-`--check` re-checks only the postings in your `tracker_active_sections`, so you don't spend
-an application hour on a role that already closed. It needs `tracker:` set in
-`config/settings.yaml`. "Unknown" there means the check learned nothing (bot wall, rate
-limit, timeout) and is never a soft "dead".
+`--check` re-checks only the rows in your `tracker_active_sections` that carry a posting
+URL — put it anywhere in the row (the Notes cell is the natural spot) and the first
+`http(s)` URL it finds is the one used — so you don't spend an application hour on a role
+that already closed. It needs `tracker:` set in `config/settings.yaml`. "Unknown" there
+means the check learned nothing (bot wall, rate limit, timeout) and is never a soft "dead".
 
 Output lands under `config/settings.yaml`'s `output_dir` (`./radar-out` by default), one
 folder per run date. `radar-out/<date>/queue.md` is the ranked table you act on, with the

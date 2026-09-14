@@ -256,6 +256,15 @@ each holding one table:
 |---|---|---|---|---|---|
 ```
 
+**Where this file goes.** It holds real companies and real comp bands, so it belongs inside
+`config/` (gitignored) or outside the repo entirely — never at the repo root under a name git
+will track. `settings.yaml`'s `tracker:` key points at wherever you put it.
+
+**Where the posting URL goes.** Put it in the row's Notes cell — `radar.py --check` scans the
+whole row for the first `http(s)` URL it finds, so any cell works, but Notes is the one built
+for free text. A row with no URL is skipped by `--check`, not flagged, since there is nothing
+to re-check.
+
 What the validator (`engine/loop/tracker_schema.py`, run by `tools/tracker_cli.py check`
 and doctor check 9) actually enforces:
 
