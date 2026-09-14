@@ -211,3 +211,376 @@ def join_archives(closed_rows, archive_dir) -> tuple:
             row=row, archive=slug_dir, company=arch_company, role=arch_role))
 
     return joined, unjoined
+
+
+# --- contrasts --------------------------------------------------------------
+
+# How outcome classes fold into the two sides of every contrast.
+#
+# "Interviewed" is offer + rejected-later: both got past the screen, which is
+# the thing the radar's scoring is actually trying to predict. A late-stage
+# rejection is evidence the posting was worth applying to even though the
+# application failed, and filing it with the screen-outs would wash out the
+# only signal here.
+#
+# "Negative" is no-response + rejected-at-screen + timed-out: the posting
+# never engaged. Silence and a screen rejection differ in politeness, not in
+# what they say about the posting.
+#
+# withdrawn and other are in NEITHER, and that is deliberate rather than an
+# oversight. A withdrawal is a fact about the applicant's decision, not about
+# the posting, so scoring rules cannot be tuned against it; `other` is by
+# definition a class nobody has interpreted yet. Both are counted in the
+# report header so their exclusion is visible.
+INTERVIEWED_CLASSES = ("offer", "rejected-later")
+NEGATIVE_CLASSES = ("no-response", "rejected-at-screen", "timed-out")
+
+EXCLUDED_FROM_CONTRASTS = ("withdrawn", "other")
+
+INTERVIEWED_LABEL = "interviewed"
+NEGATIVE_LABEL = "negative-outcome"
+
+# A proposal needs BOTH a floor on N and a floor on effect size. Either one
+# alone produces confident nonsense: a 100-point gap between two applications
+# and one, or a 2-point gap across a hundred.
+DEFAULT_MIN_N = 5
+MIN_GAP_POINTS = 20.0
+
+NEVER_EDITS_LINE = (
+    "This report never edits config. Every proposal above is a suggestion a "
+    "human applies by hand, after checking it against what they remember of "
+    "the applications behind it.")
+
+
+@dataclass(frozen=True)
+class ContrastSpec:
+    """One engine-scored feature, and what a difference in it would imply.
+
+    `present_label` and `absent_label` are both spelled out because the
+    interesting framing depends on which way the data falls — "unlisted comp"
+    is the readable statement when comp is missing from the losers, "comp
+    listed" when it is present in the winners. `raise_key`/`lower_key` name
+    the config the human would edit in either direction.
+    """
+    key: str
+    present_label: str
+    absent_label: str
+    config_file: str
+    config_key: str
+    # Verb to use when the feature is MORE common among the interviewed
+    # group, and when it is more common among the negative group.
+    verb_when_interviewed: str
+    verb_when_negative: str
+
+
+CONTRASTS = (
+    ContrastSpec(
+        key="comp",
+        present_label="comp listed in the JD",
+        absent_label="unlisted comp",
+        config_file="weights.yaml",
+        config_key="unlisted_comp_pts",
+        # unlisted_comp_pts is the score an unlisted posting receives. If
+        # listed comp tracks with interviews, unlisted postings deserve less
+        # of it; if the reverse, the current penalty is too harsh.
+        verb_when_interviewed="lowering",
+        verb_when_negative="raising",
+    ),
+    ContrastSpec(
+        key="remote",
+        present_label="remote language in the JD",
+        absent_label="no remote language in the JD",
+        config_file="weights.yaml",
+        config_key="remote_pts",
+        verb_when_interviewed="raising",
+        verb_when_negative="lowering",
+    ),
+    ContrastSpec(
+        key="title_tier",
+        present_label="a title-tier hit on the role title",
+        absent_label="no title-tier hit on the role title",
+        config_file="weights.yaml",
+        config_key="title_tiers",
+        verb_when_interviewed="raising",
+        verb_when_negative="lowering",
+    ),
+    ContrastSpec(
+        key="kill_near_miss",
+        present_label="kill-rule language in the JD",
+        absent_label="no kill-rule language in the JD",
+        config_file="rules.yaml",
+        config_key="rules",
+        # A kill rule matching a JD that was applied to anyway is a NEAR MISS:
+        # the rule did not fire at scrape time (the archived JD text is often
+        # fuller than what the scraper saw) but the language was there. If
+        # those applications went nowhere, the rules are reading real signal
+        # and should be tightened; if they interviewed, the rules are too
+        # aggressive and should be loosened.
+        verb_when_interviewed="loosening",
+        verb_when_negative="tightening",
+    ),
+)
+
+
+def _jd_text(application: JoinedApplication) -> str:
+    """The archived JD, or empty string when the archive has none. An empty
+    JD reads as "none of the text features present" rather than raising —
+    every feature here is a presence check, and absence is the honest answer
+    for a posting whose text was never kept."""
+    path = Path(application.archive) / "jd.md"
+    try:
+        return path.read_text()
+    except OSError:
+        return ""
+
+
+def application_features(application: JoinedApplication, cfg) -> dict:
+    """The engine-scored features of one archived application, as booleans
+    keyed by ContrastSpec.key. Every detector is imported from the radar
+    rather than reimplemented, so calibration measures what the radar
+    actually does and not a second opinion about it."""
+    from engine.radar.rules_engine import body_stated_max, jd_says_remote
+
+    text = _jd_text(application)
+    return {
+        "comp": body_stated_max(text) is not None,
+        "remote": jd_says_remote(text) is not None,
+        "title_tier": any(pattern.search(application.role or "")
+                          for pattern, _points in cfg.title_tiers),
+        "kill_near_miss": any(rule.pattern.search(text)
+                              for rule in cfg.kill_rules),
+    }
+
+
+def _rate(hits: int, total: int) -> float:
+    return (hits / total * 100.0) if total else 0.0
+
+
+def _pct(value: float) -> int:
+    return int(round(value))
+
+
+@dataclass
+class ContrastResult:
+    spec: ContrastSpec
+    interviewed_hits: int
+    interviewed_n: int
+    negative_hits: int
+    negative_n: int
+
+    @property
+    def interviewed_rate(self) -> float:
+        return _rate(self.interviewed_hits, self.interviewed_n)
+
+    @property
+    def negative_rate(self) -> float:
+        return _rate(self.negative_hits, self.negative_n)
+
+    @property
+    def gap(self) -> float:
+        """Absolute difference in percentage points, computed from the RAW
+        rates rather than the rounded display percentages — 67% vs 71% is a
+        5-point gap, and rounding first would report 4."""
+        return abs(self.interviewed_rate - self.negative_rate)
+
+    @property
+    def underpowered_for(self):
+        """(interviewed_n, negative_n) when either side is below the floor —
+        checked by the caller, which knows the floor."""
+        return self.interviewed_n, self.negative_n
+
+    def evidence(self) -> str:
+        """The strongest TRUE statement this contrast supports, leading with
+        whichever of the four (side, polarity) cells has the highest rate.
+
+        Both polarities are honest descriptions of the same two counts, so
+        the choice is presentational — but it is not arbitrary. Leading with
+        the highest cell puts the most legible version of the finding first
+        ("6 of 7 negative-outcome applications had unlisted comp" rather than
+        "1 of 7 had comp listed"), and fixing the rule keeps the report
+        byte-reproducible. Ties break toward the earlier cell in this order.
+        """
+        cells = (
+            (self.interviewed_rate, INTERVIEWED_LABEL, NEGATIVE_LABEL,
+             self.spec.present_label, self.interviewed_hits, self.interviewed_n,
+             self.negative_hits, self.negative_n),
+            (100.0 - self.interviewed_rate, INTERVIEWED_LABEL, NEGATIVE_LABEL,
+             self.spec.absent_label,
+             self.interviewed_n - self.interviewed_hits, self.interviewed_n,
+             self.negative_n - self.negative_hits, self.negative_n),
+            (self.negative_rate, NEGATIVE_LABEL, INTERVIEWED_LABEL,
+             self.spec.present_label, self.negative_hits, self.negative_n,
+             self.interviewed_hits, self.interviewed_n),
+            (100.0 - self.negative_rate, NEGATIVE_LABEL, INTERVIEWED_LABEL,
+             self.spec.absent_label,
+             self.negative_n - self.negative_hits, self.negative_n,
+             self.interviewed_n - self.interviewed_hits, self.interviewed_n),
+        )
+        _rate_, lead, other, label, lead_hits, lead_n, other_hits, other_n = max(
+            cells, key=lambda c: c[0])
+        return (f"{lead_hits} of {lead_n} {lead} applications had {label}, "
+                f"vs {other_hits} of {other_n} {other}")
+
+    def suggestion(self) -> str:
+        verb = (self.spec.verb_when_interviewed
+                if self.interviewed_rate >= self.negative_rate
+                else self.spec.verb_when_negative)
+        return (f"`{self.spec.config_file}`: consider {verb} "
+                f"`{self.spec.config_key}`")
+
+    def contrast_line(self) -> str:
+        return (f"- {self.spec.present_label}: "
+                f"{self.interviewed_hits} of {self.interviewed_n} "
+                f"{INTERVIEWED_LABEL} ({_pct(self.interviewed_rate)}%) vs "
+                f"{self.negative_hits} of {self.negative_n} "
+                f"{NEGATIVE_LABEL} ({_pct(self.negative_rate)}%) "
+                f"— {_pct(self.gap)}-point gap")
+
+
+def contrast_results(joined, cfg) -> list:
+    """One ContrastResult per CONTRASTS entry, in that fixed order."""
+    interviewed, negative = [], []
+    for application in joined:
+        bucket = classify_outcome(application.row.get("Outcome"))
+        if bucket in INTERVIEWED_CLASSES:
+            interviewed.append(application_features(application, cfg))
+        elif bucket in NEGATIVE_CLASSES:
+            negative.append(application_features(application, cfg))
+
+    return [
+        ContrastResult(
+            spec=spec,
+            interviewed_hits=sum(1 for f in interviewed if f[spec.key]),
+            interviewed_n=len(interviewed),
+            negative_hits=sum(1 for f in negative if f[spec.key]),
+            negative_n=len(negative),
+        )
+        for spec in CONTRASTS
+    ]
+
+
+def _summary_lines(classes: dict, joined, unjoined, results, min_n: int) -> list:
+    total = sum(len(rows) for rows in classes.values())
+    n_joined = len(joined)
+    join_pct = _pct(_rate(n_joined, total))
+    interviewed_n = results[0].interviewed_n if results else 0
+    negative_n = results[0].negative_n if results else 0
+
+    lines = [
+        "## Summary",
+        "",
+        f"Closed applications: {total}",
+        f"Joined to an archive: {n_joined} ({join_pct}%)",
+        f"Unjoined (no archive match): {len(unjoined)}",
+        "",
+        "Outcome classes:",
+    ]
+    for bucket in OUTCOME_BUCKETS:
+        lines.append(f"- {bucket}: {len(classes[bucket])}")
+        if bucket == "other" and classes[bucket]:
+            # Verbatim, and counted. An Outcome nobody anticipated is a
+            # prompt to extend the mapping table, which it cannot be if the
+            # report only ever shows a number.
+            verbatim = {}
+            for row in classes[bucket]:
+                text = (row.get("Outcome") or "").strip() or "(blank)"
+                verbatim[text] = verbatim.get(text, 0) + 1
+            for text, count in sorted(verbatim.items(),
+                                      key=lambda kv: (-kv[1], kv[0])):
+                lines.append(f'  - "{text}": {count}')
+
+    lines += [
+        "",
+        f'Contrast groups: "{INTERVIEWED_LABEL}" is '
+        f"{' + '.join(INTERVIEWED_CLASSES)} (they got past the screen), "
+        f"{interviewed_n} joined. "
+        f'"{NEGATIVE_LABEL}" is {" + ".join(NEGATIVE_CLASSES)}, '
+        f"{negative_n} joined.",
+        f"{' and '.join(EXCLUDED_FROM_CONTRASTS)} are counted above and "
+        "excluded from every contrast — a withdrawal is a fact about the "
+        "applicant, not the posting, and `other` is a class nobody has "
+        "interpreted yet.",
+        "",
+        f"Proposal floor: both sides need N >= {min_n}, and the rate gap must "
+        f"be at least {_pct(MIN_GAP_POINTS)} points.",
+    ]
+    return lines
+
+
+def calibration_report(tracker_text: str, archive_dir, cfg,
+                       min_n: int = DEFAULT_MIN_N) -> str:
+    """A markdown calibration report over one season of resolved outcomes.
+
+    Sections, in this order and always all four: Summary (totals, class
+    counts, join rate, the contrast grouping, the floor), Outcome contrasts
+    (joined applications only), Proposals, Suppressed proposals. Every
+    contrast lands in exactly one of the last two, which is what makes the
+    suppressed section worth reading — a contrast that appeared in neither
+    would be a silent drop wearing a report's clothes.
+
+    Nothing here writes anything. `cfg` is read for its title_tiers and
+    kill_rules and is never modified.
+    """
+    classes = outcome_classes(tracker_text)
+    closed_rows = [row for bucket in OUTCOME_BUCKETS for row in classes[bucket]]
+    joined, unjoined = join_archives(closed_rows, archive_dir)
+    results = contrast_results(joined, cfg)
+
+    lines = ["# Calibration report", ""]
+    lines += _summary_lines(classes, joined, unjoined, results, min_n)
+
+    lines += [
+        "",
+        "## Outcome contrasts",
+        "",
+        f"Joined applications only ({len(joined)} of "
+        f"{len(closed_rows)}). Each line reads: feature present among "
+        f"{INTERVIEWED_LABEL} vs among {NEGATIVE_LABEL}.",
+        "",
+    ]
+    lines += [result.contrast_line() for result in results]
+
+    proposals, suppressed = [], []
+    for result in results:
+        interviewed_n, negative_n = result.underpowered_for
+        if interviewed_n < min_n or negative_n < min_n:
+            suppressed.append(
+                f"- {result.spec.present_label}: insufficient data "
+                f"({INTERVIEWED_LABEL} N={interviewed_n}, "
+                f"{NEGATIVE_LABEL} N={negative_n}; floor N={min_n}).")
+        elif result.gap < MIN_GAP_POINTS:
+            suppressed.append(
+                f"- {result.spec.present_label}: gap below threshold "
+                f"({_pct(result.gap)}-point gap vs the "
+                f"{_pct(MIN_GAP_POINTS)}-point threshold; "
+                f"{INTERVIEWED_LABEL} N={interviewed_n}, "
+                f"{NEGATIVE_LABEL} N={negative_n}, floor N={min_n}).")
+        else:
+            proposals.append(
+                f"- {result.suggestion()} — {result.evidence()} "
+                f"({_pct(result.gap)}-point gap, floor N={min_n}).")
+
+    lines += ["", "## Proposals", ""]
+    if proposals:
+        lines.append(
+            f"{len(proposals)} of {len(results)} contrasts cleared the floor.")
+        lines.append("")
+        lines += proposals
+    else:
+        lines.append(
+            f"No proposal cleared the floor. All {len(results)} contrasts are "
+            "named below with the Ns that stopped them.")
+
+    lines += ["", "## Suppressed proposals", ""]
+    if suppressed:
+        lines.append(
+            f"{len(suppressed)} of {len(results)} contrasts produced no "
+            "proposal. Every one is named here with its actual Ns, so the "
+            "report cannot read as more confident than its data.")
+        lines.append("")
+        lines += suppressed
+    else:
+        lines.append("None. Every contrast cleared the floor.")
+
+    lines += ["", NEVER_EDITS_LINE, ""]
+    return "\n".join(lines)
