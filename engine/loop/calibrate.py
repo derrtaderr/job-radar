@@ -222,11 +222,19 @@ def join_archives(closed_rows, archive_dir) -> tuple:
     join rate, which reads as a clean run while every contrast downstream is
     scored against the wrong postings. There is no symptom.
 
-    So the order is: normalized exact equality on company AND role, checked
-    against every unclaimed archive, wins outright, and substring runs only
-    when nothing matched exactly. Then ONE rule governs both branches —
-    exactly one candidate joins; two or more is an ambiguity, and the row
-    joins nothing and says which archives it could not choose between.
+    So the join runs in TWO PASSES over all rows, not one pass with two
+    branches inside it. Pass 1 settles every exact match, for every row,
+    before any substring runs anywhere; pass 2 runs substring for the rows
+    still unresolved, over whatever no row claimed exactly. One rule governs
+    both passes — exactly one candidate joins; two or more is an ambiguity,
+    and the row joins nothing and says which archives it could not choose
+    between.
+
+    The two passes are what make "exact beats substring" true ACROSS rows and
+    not merely within one. With a single pass, rows consume archives in
+    tracker order, so a row that only soft-matches claims an archive before
+    the row it belongs to exactly is ever looked at — leaving the exact row
+    unjoined and the soft one scored against someone else's JD.
 
     That rule covers the exact branch too, which is easy to miss. Two
     archives exactly equal to one row (a reapplication archived twice under
@@ -246,41 +254,74 @@ def join_archives(closed_rows, archive_dir) -> tuple:
     """
     identities = _archive_identities(archive_dir)
     claimed = set()
-    joined, unjoined, ambiguous = [], [], []
+    # position -> ("joined", JoinedApplication) | ("ambiguous", AmbiguousMatch)
+    # | ("unjoined", None). Keyed by position so both passes can write into it
+    # and the three lists still come out in tracker order at the end.
+    resolved = {}
 
-    for row in closed_rows:
-        company = row.get("Company") or ""
-        role = row.get("Role") or ""
-        available = [(idx, slug_dir, arch_company, arch_role)
-                     for idx, (slug_dir, arch_company, arch_role)
-                     in enumerate(identities) if idx not in claimed]
+    def available():
+        return [(idx, slug_dir, arch_company, arch_role)
+                for idx, (slug_dir, arch_company, arch_role)
+                in enumerate(identities) if idx not in claimed]
 
-        exact = [c for c in available
-                 if _normalize_tracker_cell(company) == _normalize_tracker_cell(c[2])
-                 and _normalize_tracker_cell(role) == _normalize_tracker_cell(c[3])]
-        # Exact matches, when there are any, are the whole candidate set —
-        # substring never gets to add to them. But an exact match is not a
-        # licence to pick: two archives exactly equal to one row (a
-        # reapplication archived twice) carry no information saying which of
-        # them this row's outcome belongs to, so slug order would be the same
-        # coin-flip the soft branch was fixed for, just better dressed. One
-        # rule covers both branches below: exactly one candidate joins,
-        # anything else is an ambiguity.
-        candidates = exact or [
-            c for c in available
-            if _soft_match(company, c[2]) and _soft_match(role, c[3])]
-
+    def settle(position, row, candidates):
+        """One rule for both passes: exactly one candidate joins, anything
+        else is an ambiguity. An exact match is not a licence to pick — two
+        archives exactly equal to one row (a reapplication archived twice)
+        carry nothing saying which of them this row's outcome belongs to."""
         if len(candidates) == 1:
             idx, slug_dir, arch_company, arch_role = candidates[0]
             claimed.add(idx)
-            joined.append(JoinedApplication(
-                row=row, archive=slug_dir, company=arch_company, role=arch_role))
-            continue
-
-        unjoined.append(row)
+            resolved[position] = ("joined", JoinedApplication(
+                row=row, archive=slug_dir,
+                company=arch_company, role=arch_role))
+            return True
         if len(candidates) > 1:
-            ambiguous.append(AmbiguousMatch(
+            resolved[position] = ("ambiguous", AmbiguousMatch(
                 row=row, candidates=[c[1].name for c in candidates]))
+            return True
+        return False
+
+    rows = list(closed_rows)
+
+    # Pass 1 — every EXACT match, for every row, before any substring runs.
+    #
+    # Doing this per-row instead (exact-then-substring inside one row's scan,
+    # rows processed in order) leaves exact beating substring only WITHIN a
+    # row. Across rows the earlier row still wins: a "Widget Co / Analytics
+    # Data Engineer" row that merely soft-matches claims the archive that
+    # belongs exactly to the "Widget Co / Data Engineer" row below it, and the
+    # exact row is then reported unjoined while the soft one is scored against
+    # a JD that was never its own. No symptom, same as before.
+    pending = []
+    for position, row in enumerate(rows):
+        company = row.get("Company") or ""
+        role = row.get("Role") or ""
+        exact = [
+            c for c in available()
+            if _normalize_tracker_cell(company) == _normalize_tracker_cell(c[2])
+            and _normalize_tracker_cell(role) == _normalize_tracker_cell(c[3])]
+        if not settle(position, row, exact):
+            pending.append((position, row))
+
+    # Pass 2 — substring, over whatever no row claimed exactly.
+    for position, row in pending:
+        company = row.get("Company") or ""
+        role = row.get("Role") or ""
+        soft = [c for c in available()
+                if _soft_match(company, c[2]) and _soft_match(role, c[3])]
+        if not settle(position, row, soft):
+            resolved[position] = ("unjoined", None)
+
+    joined, unjoined, ambiguous = [], [], []
+    for position, row in enumerate(rows):
+        kind, payload = resolved[position]
+        if kind == "joined":
+            joined.append(payload)
+            continue
+        unjoined.append(row)
+        if kind == "ambiguous":
+            ambiguous.append(payload)
 
     return joined, unjoined, ambiguous
 
