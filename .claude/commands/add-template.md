@@ -1,0 +1,172 @@
+---
+description: Register a custom Typst resume or cover-letter template so /apply can use it. Refuses to register anything that does not compile.
+argument-hint: <path to a .typ file> (optional — the command will ask if omitted)
+---
+
+# /add-template
+
+Register a Typst template with `templates/registry.yaml` so `/apply` can draft into it.
+
+The stock templates work, but a resume layout is personal. Someone who already has a Typst
+resume they like should be able to keep it and still get the drafting, verification, and ATS
+machinery around it.
+
+The rule that shapes this whole command: **a template gets registered only after it has
+compiled in front of you.** A registry entry is a promise that `/apply` can produce a PDF
+from that source. Registering an unverified file breaks the promise at the worst moment —
+mid-application, with the human waiting — so the compile happens first, every time.
+
+---
+
+## Step 1 — Interview
+
+`$ARGUMENTS` may hold the source path. Ask for whatever is missing, and confirm what was
+given rather than assuming:
+
+1. **Source file** — the path to the `.typ` file. It must exist and it must be Typst.
+2. **Kind** — `resume` or `cover`. Those are the only two the registry knows
+   (`KNOWN_KINDS` in `engine/draft/registry.py`), and a third value is rejected at load
+   time. The kind decides which default `/apply` reaches for.
+3. **Compile expectations** — does it compile standalone today? Does it pull in fonts,
+   images, or `#import`ed files? A template that depends on a font the machine doesn't have
+   still compiles, but with substituted metrics and a different page count, which is the
+   kind of surprise that shows up as an overflow three steps later. Ask now.
+4. **Page limit** — the hard ceiling `/apply` verifies against, as an integer. Two for a
+   resume and one for a cover letter are the usual answers. This is a budget the drafter
+   cuts content to fit, not a description of how long the template currently runs.
+5. **Name** — the registry key, e.g. `my-resume`. Lowercase with hyphens, and unique;
+   a duplicate name raises `RegistryError` at load time.
+6. **Default?** — should this become `default_resume` / `default_cover`, the template
+   `/apply` picks with no argument? Ask explicitly. Changing a default silently changes
+   every future application.
+
+Also read the source before going further and check it for the content marker:
+
+```
+// ===== CONTENT START — the /apply drafter edits ONLY below this line =====
+```
+
+`/apply` edits only below that line and leaves everything above it alone. A template without
+the marker will still compile and still register, but the drafter has no boundary to respect
+in it — so say so, and offer to add the marker at the point where layout ends and content
+begins. Adding it is a one-line change to a copy and it is what makes the template safe to
+draft into repeatedly.
+
+## Step 2 — Copy into templates/custom/
+
+```bash
+mkdir -p templates/custom
+cp <source path> templates/custom/<file>.typ
+```
+
+Copy, never register a path outside the repo. A registry entry pointing at a file somewhere
+in the home directory breaks the moment that file moves, and `load_registry` raises on a
+missing source — loudly, but during an application.
+
+**`templates/custom/` is gitignored, and that is deliberate.** A personal resume template
+usually carries the header content baked in — real name, real email, real phone, sometimes a
+full work history. That is personal data, and this repo's standing rule is that personal data
+lives in gitignored paths only (`config/`, `apply-out/`, `templates/custom/`). The privacy
+guard fails a commit that carries an email or phone number in a tracked file, so a template
+copied into a tracked directory would block the next commit anyway. Tell the human this, once
+— it is the reason their template is not going to show up in `git status`, and unexplained
+silence there reads like a bug.
+
+## Step 3 — Test compile (mandatory, before the registry is touched)
+
+Compile the copy in `templates/custom/`, writing the PDF to a throwaway path so the repo
+doesn't accumulate build artifacts next to sources:
+
+```bash
+.venv/bin/python -c "
+from pathlib import Path
+from engine.draft.compile import compile_pdf
+ok, log = compile_pdf(Path('templates/custom/<file>.typ'), Path('/tmp/tmpl-test.pdf'))
+print('OK' if ok else 'FAIL')
+print(log)
+"
+```
+
+`compile_pdf` returns `(ok, log)` and does not raise on a broken document — the log is the
+Typst error output, and it names the line. It raises `FileNotFoundError` only when the
+`typst` binary is missing, which means `brew install typst` and is an environment problem,
+not a template problem.
+
+**If this compile fails, stop. Do not write the registry entry.** Report the Typst error,
+offer to fix it in `templates/custom/<file>.typ`, and re-run this step. Registering a
+template that does not compile means `/apply` fails mid-draft on a document the human
+believed was ready — the failure this command exists to make impossible. There is no flag,
+no override, and no "register it for now."
+
+Worth a glance while the PDF is there: open it and check the page count against the limit
+from Step 1. A template that already runs long before any content is added is a limit the
+drafter can never hit.
+
+## Step 4 — Append the registry entry
+
+Only now, with a green compile behind it, edit `templates/registry.yaml` and append to
+`templates:`:
+
+```yaml
+  - {name: <name>, source: templates/custom/<file>.typ, kind: <resume|cover>, page_limit: <N>}
+```
+
+`source` is repo-relative — `load_registry` resolves it against the repo root. `page_limit`
+must be a bare integer; the loader rejects `2.0` and rejects `yes` (which YAML would
+otherwise hand back as `True`, and `True` passes an int check).
+
+If this template is becoming the default, update the matching top-level key in the same
+edit:
+
+```yaml
+default_resume: <name>
+```
+
+## Step 5 — Verification compile of the registered entry
+
+Step 3 proved the file compiles. This step proves the **registry** is right about it — that
+the name resolves, the source path as written in the YAML points at the file, the kind is
+what was intended, and the page limit is what will be enforced. Those are different claims
+from "the file compiles," and a typo'd `source:` passes the first and fails the second.
+
+```bash
+.venv/bin/python -c "
+from pathlib import Path
+from engine.draft.registry import load_registry
+from engine.draft.compile import compile_pdf
+registry = load_registry(Path('.'))
+template = registry.get('<name>')
+print(template.name, template.kind, template.page_limit, template.source)
+ok, log = compile_pdf(template.source, Path('/tmp/tmpl-registered.pdf'))
+print('OK' if ok else 'FAIL')
+print(log)
+"
+```
+
+If the template was made a default, confirm that too:
+
+```bash
+.venv/bin/python -c "
+from pathlib import Path
+from engine.draft.registry import load_registry
+print(load_registry(Path('.')).default('<resume|cover>').name)
+"
+```
+
+**A failure here means the entry comes back out.** `RegistryError` naming a missing source
+or a bad field is a typo in the YAML — fix it and re-run. A compile that passed in Step 3
+and fails here is pointing at the wrong file. Either way the registry does not stay in a
+state where `/apply` would pick up something broken.
+
+## Step 6 — Report
+
+Say what landed:
+
+- The copied source path, and that `templates/custom/` is gitignored and why.
+- The registry line as written.
+- Both compile results — the pre-registration test and the post-registration verification.
+- Whether the default changed, and for which kind.
+- How to use it: `/apply` takes the defaults automatically; a non-default template is
+  selected by name through the registry (`registry.get('<name>')`).
+- If the template has no content marker and the offer to add one was declined, repeat that
+  once here. It is the thing that will bite during the first draft.
