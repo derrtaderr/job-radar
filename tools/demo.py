@@ -276,7 +276,17 @@ def main(argv=None) -> int:
     args = _parse(argv)
     out_dir = Path(args.out).resolve()
 
-    ok, message = _reset_out_dir(out_dir)
+    try:
+        ok, message = _reset_out_dir(out_dir)
+    except OSError as exc:
+        # mkdir(parents=True) raises a raw OSError (permission denied, a
+        # read-only filesystem, a bogus root) instead of returning the
+        # (ok, message) pair every other bad --out gets. Turn it into the
+        # same named, exit-2 refusal rather than letting a traceback stand
+        # in for "pick a different path."
+        print(f"demo: --out points at {out_dir}, which could not be created "
+              f"({exc}) — pick a writable location; nothing was deleted")
+        return 2
     if not ok:
         print(f"demo: {message}")
         return 2

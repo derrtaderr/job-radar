@@ -9,6 +9,7 @@ still exits 0 with a named note instead of a half-written output tree.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -180,6 +181,31 @@ def test_refuses_when_out_points_at_an_existing_file(tmp_path, capsys):
     assert (f"--out points at {out_path.resolve()}, which is a file, not a "
             "directory — pick an empty or new directory; nothing was "
             "deleted") in captured.out
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses permission bits")
+def test_refuses_named_instead_of_tracing_when_out_cannot_be_created(tmp_path, capsys):
+    # --out under a directory the process can't write into used to bubble a
+    # raw OSError traceback out of _reset_out_dir's mkdir(parents=True)
+    # instead of the named, exit-2 refusal every other bad --out gets.
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)  # read + execute only, no write
+    out_dir = locked / "nope"
+
+    try:
+        exit_code = demo.main(["--out", str(out_dir)])
+    finally:
+        locked.chmod(0o700)  # restore so tmp_path cleanup can remove it
+
+    assert exit_code == 2
+    assert not out_dir.exists()
+
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.out
+    assert "Traceback" not in captured.err
+    assert (f"--out points at {out_dir}, which could not be created") in captured.out
+    assert "nothing was deleted" in captured.out
 
 
 def test_a_fresh_out_path_that_does_not_exist_yet_succeeds(tmp_path):
