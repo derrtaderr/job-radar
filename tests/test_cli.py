@@ -258,3 +258,29 @@ def test_run_reports_a_missing_scrape_module_clearly(tmp_path, capsys, monkeypat
     code = main(["--config", str(cfg_dir)])
     assert code != 0
     assert "scrape module not yet available" in capsys.readouterr().out
+
+
+class _FakeScrapeModuleMissingJobspy:
+    """Simulates engine/radar/scrape.py importing fine (it always does — jobspy
+    is imported lazily inside scrape(), not at module scope) but jobspy itself
+    not being installed on this system, so calling scrape(cfg) is what raises."""
+
+    @staticmethod
+    def scrape(cfg):
+        raise ImportError("No module named 'jobspy'")
+
+
+def test_run_reports_a_missing_jobspy_dependency_clearly(tmp_path, capsys, monkeypatch):
+    # The scrape MODULE imports cleanly without jobspy on the path (it's a
+    # lazy import inside scrape()), so _scrape_module() succeeds and this
+    # ImportError only surfaces once scrape_fn(cfg) actually runs. A stranger
+    # on system python without jobspy installed must get the same friendly
+    # message as a missing scrape module, not a raw traceback.
+    import engine.radar.cli as cli
+
+    cfg_dir = _config(tmp_path)
+    monkeypatch.setattr(cli, "_scrape_module", lambda: _FakeScrapeModuleMissingJobspy)
+
+    code = main(["--config", str(cfg_dir)])
+    assert code != 0
+    assert "scrape module not yet available" in capsys.readouterr().out
