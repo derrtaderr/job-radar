@@ -16,6 +16,7 @@ import difflib
 import os
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -24,8 +25,12 @@ if __package__ in (None, ""):
     # the cross-package import below resolves.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from engine.loop.followup import stale_active
 from engine.loop.tracker_edit import TrackerEditError, add_row, move_row, touch_row
 from engine.loop.tracker_schema import parse_tracker, tracker_check
+from engine.radar.config import load_config
+
+_DEFAULT_FOLLOWUP_AFTER_DAYS = 10
 
 
 def _parse_set_args(pairs) -> dict:
@@ -44,6 +49,29 @@ def _print_diff(old_text: str, new_text: str, path: Path) -> None:
         new_text.splitlines(keepends=True),
         fromfile=str(path), tofile=str(path))
     sys.stdout.writelines(diff)
+
+
+def _print_stale_report(stale: list, unknown_touch: list, days: int) -> None:
+    """Print the stale-rows table and the unknown-touch list. Always exits
+    0 upstream (stale rows are information a person acts on, not an
+    error) — this only formats what stale_active found."""
+    if stale:
+        print(f"stale ({days}+ days quiet):")
+        for row in stale:
+            print(f"  {row.company} — {row.role} — {row.days_quiet}d quiet "
+                  f"(last touch {row.last_touch.isoformat()}) — "
+                  f"stage: {row.stage or '(none)'} — next: {row.next_step or '(none)'}")
+    else:
+        print(f"stale ({days}+ days quiet): none")
+
+    if unknown_touch:
+        print("unknown touch (no parseable Last-touch date):")
+        for row, reason in unknown_touch:
+            company = row.get("Company") or "(no company)"
+            role = row.get("Role") or "(no role)"
+            print(f"  {company} — {role} — {reason}")
+    else:
+        print("unknown touch: none")
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -115,6 +143,19 @@ def main(argv=None) -> int:
     touch_parser.add_argument("--value", required=True)
     touch_parser.add_argument("--dry-run", action="store_true")
 
+    stale_parser = subparsers.add_parser(
+        "stale", help="scan the Active section for rows that have gone quiet")
+    stale_parser.add_argument("path")
+    stale_parser.add_argument("--days", type=int, default=None,
+                               help="days quiet to count as stale; default is "
+                                    "the config's followup_after_days if --config "
+                                    "is given, else 10")
+    stale_parser.add_argument("--today", default=None,
+                               help="YYYY-MM-DD; defaults to today's date")
+    stale_parser.add_argument("--config", default=None,
+                               help="config dir to read followup_after_days from "
+                                    "when --days is not given")
+
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -152,6 +193,21 @@ def main(argv=None) -> int:
             path, args.dry_run,
             lambda text: touch_row(text, args.section, args.company,
                                     args.role, args.column, args.value))
+
+    if args.command == "stale":
+        if args.days is not None:
+            days = args.days
+        elif args.config:
+            days = load_config(Path(args.config)).followup_after_days
+        else:
+            days = _DEFAULT_FOLLOWUP_AFTER_DAYS
+
+        today = date.fromisoformat(args.today) if args.today else date.today()
+
+        text = path.read_text()
+        stale, unknown_touch = stale_active(text, today, days)
+        _print_stale_report(stale, unknown_touch, days)
+        return 0
 
     raise AssertionError(f"unhandled command: {args.command!r}")  # argparse guards this
 
