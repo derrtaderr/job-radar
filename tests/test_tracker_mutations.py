@@ -12,9 +12,35 @@ All fixtures are synthetic (fictional companies, real column-header shape).
 """
 import difflib
 
-from engine.loop.tracker_edit import TrackerEditError, add_row, move_row
+from engine.loop.tracker_edit import TrackerEditError, add_row, move_row, touch_row
 from engine.loop.tracker_schema import parse_tracker
 from tests.fixtures_tracker import DUPLICATE_COMPANY_ROLE, VALID_TRACKER
+
+# A hand-edited tracker carries formatting noise VALID_TRACKER doesn't: an
+# annotation, uneven pipe spacing (none at all on one row, extra padding on
+# another), a **bold** cell, and a cell with an escaped literal pipe. Every
+# company here is fictional. This fixture exists to prove touch_row's
+# byte-for-byte claim survives that noise, not just clean input.
+MESSY_TRACKER = """\
+## Active
+
+| Company | Role | Source | Stage | Comp band | Last touch | Next step | Notes |
+|---|---|---|---|---|---|---|---|
+|Cobalt Grid|**Data Platform Engineer**|LinkedIn|HM round|150-180k|2026-09-10|Send follow-up|Growth \\| Ops team|
+| Harborlight (via referral)   |  Senior Data Engineer  | Referral | Screen | 160-190k | 2026-09-12 | Await scheduling | Warm intro from Alex |
+
+## Drafted but not applied
+
+| Company | Role | Source | Comp band | Resume | Next step | Notes |
+|---|---|---|---|---|---|---|
+| Meridian Analytics | Analytics Engineer | Job board | 140-165k | v3 | Finish cover letter | JD emphasizes SQL |
+
+## Closed
+
+| Company | Role | Date closed | Outcome | Reason | Carry-forward lesson |
+|---|---|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected | Final round, lost to internal candidate | Ask about internal candidates earlier |
+"""
 
 
 # --- diff helpers --------------------------------------------------------
@@ -229,3 +255,160 @@ def test_move_row_unknown_extra_key_raises_naming_it():
         assert False, "expected TrackerEditError"
     except TrackerEditError as e:
         assert "Salary" in str(e)
+
+
+# --- touch_row: diff helper --------------------------------------------
+
+def _assert_only_line_change(old_text, new_text):
+    """Assert new_text is old_text with exactly one line changed IN PLACE
+    (same index, nothing inserted or removed). Returns
+    (index, old_line, new_line)."""
+    old_lines = old_text.splitlines()
+    new_lines = new_text.splitlines()
+    assert len(old_lines) == len(new_lines)
+    diffs = [i for i in range(len(old_lines)) if old_lines[i] != new_lines[i]]
+    assert len(diffs) == 1, diffs
+    i = diffs[0]
+    return i, old_lines[i], new_lines[i]
+
+
+# --- touch_row: happy path -----------------------------------------------
+
+def test_touch_row_updates_cell_preserves_rest_of_line():
+    new_text = touch_row(VALID_TRACKER, "active", "Cobalt Grid",
+                          "Data Platform Engineer", "Last touch", "2026-09-13")
+    _, old_line, new_line = _assert_only_line_change(VALID_TRACKER, new_text)
+    assert "2026-09-10" in old_line
+    assert "2026-09-13" in new_line and "2026-09-10" not in new_line
+
+    sections = parse_tracker(new_text)
+    row = next(r for r in sections["active"].rows if r["Company"] == "Cobalt Grid")
+    assert row["Last touch"] == "2026-09-13"
+    assert row["Role"] == "Data Platform Engineer"  # untouched cell intact
+    assert row["Next step"] == "Send follow-up"
+    assert row["Notes"] == "Strong tech fit"
+
+
+def test_touch_row_preserves_messy_row_byte_for_byte_except_touched_cell():
+    new_text = touch_row(MESSY_TRACKER, "active", "Harborlight",
+                          "Senior Data Engineer", "Last touch", "2026-09-13")
+    _, old_line, new_line = _assert_only_line_change(MESSY_TRACKER, new_text)
+    # untouched cells' exact (uneven) padding survives verbatim
+    assert "Harborlight (via referral)   " in new_line
+    assert "  Senior Data Engineer  " in new_line
+    assert "2026-09-13" in new_line and "2026-09-12" not in new_line
+
+    # the OTHER data row (bold cell, escaped pipe, zero pipe padding) never
+    # moved and was never touched, let alone reformatted
+    other_old = next(l for l in MESSY_TRACKER.splitlines() if "Cobalt Grid" in l)
+    other_new = next(l for l in new_text.splitlines() if "Cobalt Grid" in l)
+    assert other_old == other_new
+    assert "**Data Platform Engineer**" in other_new
+    assert "Growth \\| Ops team" in other_new
+
+
+# --- touch_row: refusal cases ----------------------------------------------
+
+def test_touch_row_unknown_column_raises_naming_it():
+    try:
+        touch_row(VALID_TRACKER, "active", "Cobalt Grid",
+                  "Data Platform Engineer", "Not A Column", "x")
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "Not A Column" in str(e)
+
+
+def test_touch_row_unknown_section_raises_naming_it():
+    try:
+        touch_row(VALID_TRACKER, "not-a-section", "Cobalt Grid",
+                  "Data Platform Engineer", "Last touch", "2026-09-13")
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "not-a-section" in str(e)
+
+
+def test_touch_row_zero_match_raises_naming_company():
+    try:
+        touch_row(VALID_TRACKER, "active", "Nonexistent Corp", "Ghost Role",
+                  "Last touch", "2026-09-13")
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "Nonexistent Corp" in str(e)
+
+
+def test_touch_row_ambiguous_match_raises_naming_both_lines():
+    try:
+        touch_row(DUPLICATE_COMPANY_ROLE, "active", "Cobalt Grid",
+                  "Data Platform Engineer", "Last touch", "2026-09-13")
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "5" in str(e) and "6" in str(e)
+
+
+# --- CLI: add / move / touch subcommands ------------------------------------
+
+from tools.tracker_cli import main as cli_main  # noqa: E402
+
+
+def _write(tmp_path, text):
+    path = tmp_path / "tracker.md"
+    path.write_text(text)
+    return path
+
+
+def test_cli_add_writes_new_row_and_prints_diff(tmp_path, capsys):
+    path = _write(tmp_path, VALID_TRACKER)
+    rc = cli_main(["add", str(path), "--section", "research",
+                   "--set", "Company=Solace Systems",
+                   "--set", "Role=Data Engineer"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Solace Systems" in out  # diff shown before writing
+    sections = parse_tracker(path.read_text())
+    assert any(r["Company"] == "Solace Systems" for r in sections["research"].rows)
+
+
+def test_cli_add_dry_run_does_not_write(tmp_path, capsys):
+    path = _write(tmp_path, VALID_TRACKER)
+    original = path.read_text()
+    rc = cli_main(["add", str(path), "--section", "research",
+                   "--set", "Company=Solace Systems", "--dry-run"])
+    assert rc == 0
+    assert path.read_text() == original
+    assert "Solace Systems" in capsys.readouterr().out
+
+
+def test_cli_move_writes_target_and_removes_source(tmp_path, capsys):
+    path = _write(tmp_path, VALID_TRACKER)
+    rc = cli_main(["move", str(path), "--company", "Meridian Analytics",
+                   "--role", "Analytics Engineer",
+                   "--from", "drafted but not applied", "--to", "active",
+                   "--set", "Stage=Applied", "--set", "Last touch=2026-09-13"])
+    assert rc == 0
+    sections = parse_tracker(path.read_text())
+    assert any(r["Company"] == "Meridian Analytics" for r in sections["active"].rows)
+    assert not any(r["Company"] == "Meridian Analytics"
+                   for r in sections["drafted but not applied"].rows)
+
+
+def test_cli_touch_updates_cell(tmp_path, capsys):
+    path = _write(tmp_path, VALID_TRACKER)
+    rc = cli_main(["touch", str(path), "--section", "active",
+                   "--company", "Cobalt Grid",
+                   "--role", "Data Platform Engineer",
+                   "--column", "Last touch", "--value", "2026-09-13"])
+    assert rc == 0
+    sections = parse_tracker(path.read_text())
+    row = next(r for r in sections["active"].rows if r["Company"] == "Cobalt Grid")
+    assert row["Last touch"] == "2026-09-13"
+
+
+def test_cli_touch_unknown_column_errors_without_writing(tmp_path, capsys):
+    path = _write(tmp_path, VALID_TRACKER)
+    original = path.read_text()
+    rc = cli_main(["touch", str(path), "--section", "active",
+                   "--company", "Cobalt Grid",
+                   "--role", "Data Platform Engineer",
+                   "--column", "Not A Column", "--value", "x"])
+    assert rc == 1
+    assert path.read_text() == original
