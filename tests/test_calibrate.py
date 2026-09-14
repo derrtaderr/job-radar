@@ -399,3 +399,99 @@ def test_unjoined_rows_never_reach_the_contrasts(tmp_path):
     contrasts = _section(report, "## Outcome contrasts")
     assert "of 11" not in contrasts
     assert "Joined applications only" in contrasts
+
+
+# --- tools/calibrate.py: the CLI --------------------------------------------
+# Fully qualified import, always. `tools.calibrate` and `engine.loop.calibrate`
+# share a basename, and a bare `import calibrate` would resolve to whichever
+# happened to be on sys.path first.
+
+def test_cli_prints_the_report(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    code = main([str(season.tracker_path),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "# Calibration report" in out
+    assert "`weights.yaml`: consider lowering `unlisted_comp_pts`" in out
+    assert "never edits config" in out
+
+
+def test_cli_writes_the_report_with_out(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+    out_file = tmp_path / "calibration.md"
+
+    code = main([str(season.tracker_path),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir),
+                 "--out", str(out_file)])
+
+    assert code == 0
+    assert "# Calibration report" in out_file.read_text()
+
+
+def test_cli_honors_min_n(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    main([str(season.tracker_path),
+          "--archive", str(season.archive_dir),
+          "--config", str(season.config_dir),
+          "--min-n", "8"])
+
+    out = capsys.readouterr().out
+    assert "No proposal cleared the floor" in out
+    assert "floor N=8" in out
+
+
+def test_cli_defaults_archive_dir_to_the_config(tmp_path, capsys):
+    # settings.yaml already names archive_dir. Making the flag mandatory would
+    # invite a second, drifting answer to a question the config answers.
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+    (season.config_dir / "settings.yaml").write_text(
+        (season.config_dir / "settings.yaml").read_text()
+        + f"\narchive_dir: {season.archive_dir}\n")
+
+    code = main([str(season.tracker_path), "--config", str(season.config_dir)])
+
+    assert code == 0
+    assert "Joined to an archive: 13 (65%)" in capsys.readouterr().out
+
+
+def test_cli_never_writes_into_the_config_dir(tmp_path, capsys):
+    # The one thing this tool must never do. Pinned as a test, not just a
+    # sentence in the report.
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+    before = {p.name: p.read_bytes() for p in season.config_dir.iterdir()}
+
+    main([str(season.tracker_path),
+          "--archive", str(season.archive_dir),
+          "--config", str(season.config_dir)])
+
+    after = {p.name: p.read_bytes() for p in season.config_dir.iterdir()}
+    assert before == after
+
+
+def test_cli_reports_a_missing_tracker_by_name(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    code = main([str(tmp_path / "no-such-tracker.md"),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir)])
+
+    assert code == 1
+    assert "no-such-tracker.md" in capsys.readouterr().err
