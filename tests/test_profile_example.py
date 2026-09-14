@@ -7,39 +7,25 @@ has nothing to check against. These tests pin the shape.
 
 Parsing is deliberately plain-text: the file is markdown with a YAML-ish
 frontmatter block, and pinning it with a line scan keeps the test honest about
-what a reader (human or session) actually sees.
+what a reader (human or session) actually sees. The scan itself lives in
+engine/profile_schema.py, shared with tools/doctor.py check 5 — this file
+pins the shipped example against that same schema, it doesn't keep its own
+copy of the parsing.
 """
 from pathlib import Path
 
-PROFILE = Path(__file__).parent.parent / "config.example" / "profile.md"
-
-REQUIRED_FRONTMATTER_KEYS = ("name", "email", "phone", "location", "links")
-REQUIRED_SECTIONS = (
-    "## Summary",
-    "## Experience",
-    "## Skills",
-    "## Education",
-    "## Evidence notes",
+from engine.profile_schema import (
+    CLAIM_LEDGER_LINE,
+    REQUIRED_FRONTMATTER_KEYS,
+    REQUIRED_SECTIONS,
+    split_frontmatter,
 )
-CLAIM_LEDGER_LINE = (
-    "This file is the CLAIM LEDGER. The drafter may only write resume claims "
-    "that trace to a line here.")
 
-
-def _split_frontmatter(text: str) -> tuple[list[str], str]:
-    """Return (frontmatter lines, body). Raises AssertionError if the file
-    doesn't open with a `---` fenced block, which is itself the schema."""
-    lines = text.splitlines()
-    assert lines and lines[0].strip() == "---", (
-        "profile.md must open with a '---' frontmatter fence")
-    for index in range(1, len(lines)):
-        if lines[index].strip() == "---":
-            return lines[1:index], "\n".join(lines[index + 1:])
-    raise AssertionError("profile.md frontmatter block is never closed with '---'")
+PROFILE = Path(__file__).parent.parent / "config.example" / "profile.md"
 
 
 def test_frontmatter_carries_the_five_keys():
-    front, _ = _split_frontmatter(PROFILE.read_text())
+    front, _ = split_frontmatter(PROFILE.read_text())
     keys = {line.split(":", 1)[0].strip() for line in front if ":" in line}
 
     missing = [key for key in REQUIRED_FRONTMATTER_KEYS if key not in keys]
@@ -54,7 +40,7 @@ def test_frontmatter_carries_the_five_keys():
 
 
 def test_body_carries_the_required_sections():
-    _, body = _split_frontmatter(PROFILE.read_text())
+    _, body = split_frontmatter(PROFILE.read_text())
     headings = [line.strip() for line in body.splitlines() if line.startswith("## ")]
 
     missing = [section for section in REQUIRED_SECTIONS if section not in headings]
