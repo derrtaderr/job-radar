@@ -149,7 +149,7 @@ def test_join_matches_on_outcome_frontmatter_company_and_role(tmp_path):
     _archive(tmp_path, "cobalt-grid-data-engineer", "Cobalt Grid", "Data Engineer")
     rows = outcome_classes(_one("Offer"))["offer"]
 
-    joined, unjoined = join_archives(rows, tmp_path / "archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
 
     assert len(joined) == 1
     assert unjoined == []
@@ -163,7 +163,7 @@ def test_unjoined_rows_come_back_rather_than_being_dropped(tmp_path):
     (tmp_path / "archive").mkdir()
     rows = outcome_classes(_one("Offer"))["offer"]
 
-    joined, unjoined = join_archives(rows, tmp_path / "archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
 
     assert joined == []
     assert [r.get("Company") for r in unjoined] == ["Cobalt Grid"]
@@ -178,7 +178,7 @@ def test_join_survives_a_tracker_cell_annotation(tmp_path):
         "Harborlight (via referral) | Senior Data Engineer | "
         "2026-08-20 | Offer | n/a | n/a"))["offer"]
 
-    joined, unjoined = join_archives(rows, tmp_path / "archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
 
     assert len(joined) == 1 and unjoined == []
 
@@ -192,7 +192,7 @@ def test_a_company_match_alone_is_not_a_join(tmp_path):
         "Cobalt Grid | Platform Reliability Engineer | "
         "2026-08-20 | Offer | n/a | n/a"))["offer"]
 
-    joined, unjoined = join_archives(rows, tmp_path / "archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
 
     assert joined == [] and len(unjoined) == 1
 
@@ -207,14 +207,14 @@ def test_each_archive_is_consumed_once(tmp_path):
         "Tessellate | Data Engineer | 2026-04-02 | Offer | n/a | n/a",
         "Tessellate | Data Engineer | 2026-08-20 | Offer | n/a | n/a"))["offer"]
 
-    joined, unjoined = join_archives(rows, tmp_path / "archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
 
     assert len(joined) == 1 and len(unjoined) == 1
 
 
 def test_a_missing_archive_dir_is_all_unjoined_not_a_crash(tmp_path):
     rows = outcome_classes(_one("Offer"))["offer"]
-    joined, unjoined = join_archives(rows, tmp_path / "no-such-archive")
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "no-such-archive")
     assert joined == [] and len(unjoined) == 1
 
 
@@ -495,3 +495,152 @@ def test_cli_reports_a_missing_tracker_by_name(tmp_path, capsys):
 
     assert code == 1
     assert "no-such-tracker.md" in capsys.readouterr().err
+
+
+# --- C1: similar roles at one company must not cross-join --------------------
+
+def test_two_similar_roles_at_one_company_join_to_their_own_archives(tmp_path):
+    # The reviewer's probe. "Data Engineer" is a SUBSTRING of "Analytics Data
+    # Engineer", so a substring-first join hands each row whichever archive it
+    # meets first — swapping the two JDs, reporting unjoined=[] and a 100%
+    # join rate, and corrupting every contrast with no visible symptom.
+    # Normalized exact equality has to win before substring is ever tried.
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer",
+             jd="Base salary range is $165,000 to $195,000 per year.\n")
+    _archive(tmp_path, "widget-co-analytics-data-engineer",
+             "Widget Co", "Analytics Data Engineer",
+             jd="Compensation is competitive.\n")
+
+    rows = outcome_classes(_closed(
+        "Widget Co | Data Engineer | 2026-05-01 | Offer | n/a | n/a",
+        "Widget Co | Analytics Data Engineer | 2026-05-02 | No response | n/a | n/a"))
+    ordered = rows["offer"] + rows["no-response"]
+
+    joined, unjoined, ambiguous = join_archives(ordered, tmp_path / "archive")
+
+    assert unjoined == [] and ambiguous == []
+    by_role = {j.row.get("Role"): j.archive.name for j in joined}
+    assert by_role == {
+        "Data Engineer": "widget-co-data-engineer",
+        "Analytics Data Engineer": "widget-co-analytics-data-engineer",
+    }
+
+
+def test_exact_match_wins_even_when_it_sorts_after_a_substring_candidate(tmp_path):
+    # Slug order must not decide this. "widget-co-analytics-data-engineer"
+    # sorts BEFORE the exact archive, so a first-match-wins substring scan
+    # reaches the wrong one first.
+    _archive(tmp_path, "widget-co-analytics-data-engineer",
+             "Widget Co", "Analytics Data Engineer")
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+
+    rows = outcome_classes(_one("Offer"))  # Cobalt Grid, unrelated
+    rows = outcome_classes(_closed(
+        "Widget Co | Data Engineer | 2026-05-01 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and unjoined == [] and ambiguous == []
+    assert joined[0].archive.name == "widget-co-data-engineer"
+
+
+def test_a_genuinely_ambiguous_row_is_unjoined_and_names_its_candidates(tmp_path):
+    # No exact match, and TWO archives soft-match. Guessing here is what the
+    # critical bug did. The row joins nothing and says which two it could not
+    # choose between.
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    _archive(tmp_path, "widget-co-analytics-engineer",
+             "Widget Co", "Analytics Engineer")
+
+    rows = outcome_classes(_closed(
+        "Widget Co | Engineer | 2026-05-01 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert joined == []
+    assert len(unjoined) == 1, "an ambiguous row is still an unjoined row"
+    assert len(ambiguous) == 1
+    assert ambiguous[0].row is unjoined[0]
+    assert sorted(ambiguous[0].candidates) == [
+        "widget-co-analytics-engineer", "widget-co-data-engineer"]
+
+
+def test_substring_fallback_still_joins_when_exactly_one_candidate(tmp_path):
+    # The fallback earns its keep: a tracker annotation still joins, because
+    # only one archive can possibly be meant.
+    _archive(tmp_path, "harborlight-senior-data-engineer",
+             "Harborlight", "Senior Data Engineer")
+    rows = outcome_classes(_closed(
+        "Harborlight Data | Senior Data Engineering | "
+        "2026-05-01 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and unjoined == [] and ambiguous == []
+
+
+def test_ambiguous_rows_are_named_in_the_report_header(tmp_path):
+    from engine.loop.calibrate import calibration_report
+    from tests.fixtures_season import build_config
+
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    _archive(tmp_path, "widget-co-analytics-engineer",
+             "Widget Co", "Analytics Engineer")
+    tracker = _closed("Widget Co | Engineer | 2026-05-01 | Offer | n/a | n/a")
+
+    from engine.radar.config import load_config
+    cfg = load_config(build_config(tmp_path))
+    summary = _section(
+        calibration_report(tracker, tmp_path / "archive", cfg), "## Summary")
+
+    assert "Ambiguous" in summary
+    assert "Widget Co / Engineer" in summary
+    assert "widget-co-analytics-engineer" in summary
+    assert "widget-co-data-engineer" in summary
+
+
+# --- M7: rows are joined in TRACKER order, not bucket order -----------------
+
+def test_contested_archive_goes_to_the_earlier_tracker_row(tmp_path):
+    # Joining in bucket order would let an `offer` row anywhere in the file
+    # claim a contested archive ahead of a `no-response` row above it, which
+    # biases the interviewed side of every contrast upward.
+    from engine.loop.calibrate import calibration_report, closed_rows
+    _archive(tmp_path, "tessellate-data-engineer", "Tessellate", "Data Engineer")
+    tracker = _closed(
+        "Tessellate | Data Engineer | 2026-05-01 | No response | n/a | n/a",
+        "Tessellate | Data Engineer | 2026-08-01 | Offer | n/a | n/a")
+
+    joined, unjoined, _amb = join_archives(
+        closed_rows(tracker), tmp_path / "archive")
+
+    assert len(joined) == 1
+    assert joined[0].row.get("Outcome") == "No response"
+    assert unjoined[0].get("Outcome") == "Offer"
+
+
+def test_closed_rows_are_returned_in_tracker_order(tmp_path):
+    from engine.loop.calibrate import closed_rows
+    tracker = _closed(
+        "Alpha Data | Data Engineer | 2026-05-01 | No response | n/a | n/a",
+        "Beta Systems | Data Engineer | 2026-06-01 | Offer | n/a | n/a",
+        "Gamma Works | Data Engineer | 2026-07-01 | Withdrew | n/a | n/a")
+    assert [r.get("Company") for r in closed_rows(tracker)] == [
+        "Alpha Data", "Beta Systems", "Gamma Works"]
+
+
+# --- M4: the slug fallback has to be able to match --------------------------
+
+def test_an_archive_with_no_outcome_md_still_joins_by_its_slug(tmp_path):
+    # The fallback identity is the slug with hyphens turned back into spaces.
+    # Leaving it hyphenated made it unmatchable, which is a fallback that
+    # never fires — worse than none, because it looks handled.
+    slug_dir = tmp_path / "archive" / "cobalt-grid-data-engineer"
+    slug_dir.mkdir(parents=True)
+    (slug_dir / "jd.md").write_text("Compensation is competitive.\n")
+
+    rows = outcome_classes(_one("Offer"))["offer"]
+    joined, unjoined, ambiguous = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and unjoined == [] and ambiguous == []
+    assert joined[0].archive.name == "cobalt-grid-data-engineer"

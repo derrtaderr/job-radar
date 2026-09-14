@@ -212,23 +212,28 @@ def jd_text(company: str, role: str, *, comp: bool, remote: bool,
     return "\n".join(lines) + "\n"
 
 
-def season_tracker_text() -> str:
-    """The tracker markdown alone — for tests that need the rows without
-    paying for an archive tree on disk."""
+def tracker_text_for(rows) -> str:
+    """The tracker markdown for any row table in SEASON_ROWS shape."""
     header = (
         "## Closed\n\n"
         "| Company | Role | Date closed | Outcome | Reason | "
         "Carry-forward lesson |\n"
         "|---|---|---|---|---|---|\n")
-    rows = []
-    for idx, (company, role, outcome, *_rest) in enumerate(SEASON_ROWS):
+    body = []
+    for idx, (company, role, outcome, *_rest) in enumerate(rows):
         # Dates are generated from the row's position, never from the clock —
         # the report has to be byte-reproducible from the same inputs.
         closed = f"2026-{(idx % 6) + 3:02d}-{(idx % 27) + 1:02d}"
-        rows.append(
+        body.append(
             f"| {company} | {role} | {closed} | {outcome} | "
             f"See notes | Carry forward |\n")
-    return _ACTIVE_SECTION + header + "".join(rows)
+    return _ACTIVE_SECTION + header + "".join(body)
+
+
+def season_tracker_text() -> str:
+    """The full season's tracker markdown alone — for tests that need the
+    rows without paying for an archive tree on disk."""
+    return tracker_text_for(SEASON_ROWS)
 
 
 def build_config(tmp_path: Path) -> Path:
@@ -240,22 +245,28 @@ def build_config(tmp_path: Path) -> Path:
     return config_dir
 
 
-def build_season(tmp_path: Path) -> Season:
-    """Write the whole synthetic season under `tmp_path` and return it."""
-    tracker_text = season_tracker_text()
+def build_applications(tmp_path: Path, rows, *, archive_slugs=None) -> Season:
+    """Write a tracker plus an archive tree for any row table in SEASON_ROWS
+    shape — `(company, role, outcome, archived, comp, remote, kill)`.
+
+    `archive_slugs` optionally overrides the slug a row's archive is written
+    under, which is how the join tests build an archive whose directory name
+    disagrees with its outcome.md frontmatter.
+    """
+    tracker_text = tracker_text_for(rows)
     tracker_path = tmp_path / "tracker.md"
     tracker_path.write_text(tracker_text)
 
     archive_dir = tmp_path / "archive"
-    archive_dir.mkdir()
+    archive_dir.mkdir(exist_ok=True)
     apply_root = tmp_path / "apply-out"
 
     joined = 0
-    for company, role, _outcome, archived, comp, remote, kill in SEASON_ROWS:
+    for idx, (company, role, _outcome, archived, comp, remote, kill) in enumerate(rows):
         if not archived:
             continue
         joined += 1
-        slug = _slug(company, role)
+        slug = (archive_slugs or {}).get(idx) or _slug(company, role)
         apply_dir = apply_root / slug
         apply_dir.mkdir(parents=True)
         (apply_dir / "jd.md").write_text(
@@ -272,6 +283,11 @@ def build_season(tmp_path: Path) -> Season:
         archive_dir=archive_dir,
         config_dir=config_dir,
         cfg=load_config(config_dir),
-        closed_count=len(SEASON_ROWS),
+        closed_count=len(rows),
         joined_count=joined,
     )
+
+
+def build_season(tmp_path: Path) -> Season:
+    """Write the whole synthetic season under `tmp_path` and return it."""
+    return build_applications(tmp_path, SEASON_ROWS)
