@@ -87,6 +87,30 @@ def test_pipeline_does_not_collide_rows_with_no_job_url():
     assert set(new_state) == {"a", "b"}
 
 
+def test_pipeline_does_not_collide_distinct_rows_with_no_id_and_no_url():
+    # Both id and job_url missing must not collapse to the literal string
+    # "None" for every such row — two distinct postings need two distinct
+    # synthetic ids, both surviving and both recorded in state.
+    raw = [make_row(id=None, job_url=None, company="Cobalt Grid",
+                    title="Data Platform Engineer"),
+           make_row(id=None, job_url=None, company="Harborlight Data",
+                    title="Platform Reliability Engineer")]
+    survivors, _, new_state = pipeline(raw, state={}, cfg=CFG,
+                                       tracker_set=set(), today=TODAY)
+    assert [r["company"] for r in survivors] == ["Cobalt Grid", "Harborlight Data"]
+    assert len(new_state) == 2
+
+    # A THIRD such row, on a second run seeded with the state above, must not
+    # be falsely suppressed — that would happen if every no-id/no-url row
+    # shared one synthetic key that the first run already wrote to state.
+    third = make_row(id=None, job_url=None, company="Quarry Systems",
+                     title="Data Engineer")
+    survivors2, _, new_state2 = pipeline([third], state=new_state, cfg=CFG,
+                                         tracker_set=set(), today=TODAY)
+    assert [r["company"] for r in survivors2] == ["Quarry Systems"]
+    assert len(new_state2) == 3
+
+
 def test_pipeline_dedups_by_url_within_one_run():
     raw = [make_row(id="a", job_url="https://example.com/jobs/view/1",
                     company="Cobalt Grid"),

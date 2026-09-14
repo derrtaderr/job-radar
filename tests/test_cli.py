@@ -260,6 +260,35 @@ def test_run_reports_a_missing_scrape_module_clearly(tmp_path, capsys, monkeypat
     assert "scrape module not yet available" in capsys.readouterr().out
 
 
+class _FakeScrapeModuleMissingUnrelatedDependency:
+    """Simulates a completely unrelated missing import surfacing through
+    scrape(cfg) — not jobspy, something a stranger's environment is missing
+    for its own reasons."""
+
+    @staticmethod
+    def scrape(cfg):
+        raise ImportError("No module named 'totally_unrelated'")
+
+
+def test_run_includes_the_underlying_import_error_with_the_friendly_message(
+        tmp_path, capsys, monkeypatch):
+    # The friendly _NO_SCRAPE message alone is misleading when the real cause
+    # is some OTHER missing dependency — it reads as "the scrape module itself
+    # is missing" when actually jobspy imported fine and something else did
+    # not. The underlying exception text must ride along, not be swallowed.
+    import engine.radar.cli as cli
+
+    cfg_dir = _config(tmp_path)
+    monkeypatch.setattr(cli, "_scrape_module",
+                        lambda: _FakeScrapeModuleMissingUnrelatedDependency)
+
+    code = main(["--config", str(cfg_dir)])
+    assert code != 0
+    out = capsys.readouterr().out
+    assert "totally_unrelated" in out
+    assert "scrape module not yet available" in out
+
+
 class _FakeScrapeModuleMissingJobspy:
     """Simulates engine/radar/scrape.py importing fine (it always does — jobspy
     is imported lazily inside scrape(), not at module scope) but jobspy itself
