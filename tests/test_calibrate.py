@@ -644,3 +644,85 @@ def test_an_archive_with_no_outcome_md_still_joins_by_its_slug(tmp_path):
 
     assert len(joined) == 1 and unjoined == [] and ambiguous == []
     assert joined[0].archive.name == "cobalt-grid-data-engineer"
+
+
+# --- I2: one application must never carry a proposal ------------------------
+
+def _five_and_five(tmp_path):
+    """Five interviewed, five negative, all archived. Comp is the only
+    feature that varies: 5 of 5 interviewed vs 4 of 5 negative — a 20-point
+    gap that is exactly ONE application of movement at N=5."""
+    from tests.fixtures_season import build_applications
+    rows = (
+        ("Cobalt Grid", "Data Engineer", "Offer", True, True, False, False),
+        ("Meridian Analytics", "Data Engineer", "Offer", True, True, False, False),
+        ("Tessellate", "Data Engineer", "Rejected after onsite", True, True, False, False),
+        ("Harborlight", "Data Engineer", "Rejected after onsite", True, True, False, False),
+        ("Voss Continuum", "Data Engineer", "Rejected after onsite", True, True, False, False),
+        ("Pinecrest Software", "Data Engineer", "No response", True, True, False, False),
+        ("Bellweather Labs", "Data Engineer", "No response", True, True, False, False),
+        ("Fernmark Systems", "Data Engineer", "No response", True, True, False, False),
+        ("Aldgate Partners", "Data Engineer", "No response", True, True, False, False),
+        ("Orrery Compute", "Data Engineer", "No response", True, False, False, False),
+    )
+    return build_applications(tmp_path, rows)
+
+
+def test_one_application_of_movement_never_clears_the_floor(tmp_path):
+    # At min_n=5 a single application is worth exactly 20 points, so the flat
+    # 20-point threshold let ONE application propose a config change. The gap
+    # must also clear two applications of movement at the smaller N.
+    from engine.loop.calibrate import calibration_report
+    season = _five_and_five(tmp_path)
+
+    report = calibration_report(
+        season.tracker_text, season.archive_dir, season.cfg, min_n=5)
+
+    contrasts = _section(report, "## Outcome contrasts")
+    assert "5 of 5 interviewed (100%) vs 4 of 5 negative-outcome (80%)" in contrasts
+    assert "No proposal cleared the floor" in _section(report, "## Proposals")
+
+
+def test_the_one_application_case_is_named_plainly_in_suppressed(tmp_path):
+    from engine.loop.calibrate import calibration_report
+    season = _five_and_five(tmp_path)
+
+    suppressed = _section(
+        calibration_report(season.tracker_text, season.archive_dir,
+                           season.cfg, min_n=5),
+        "## Suppressed proposals")
+
+    assert (
+        "- comp listed in the JD: gap within one-application noise at these "
+        "Ns (20-point gap vs a 40-point floor, which is two applications at "
+        "N=5; interviewed N=5, negative-outcome N=5, floor N=5)."
+        in suppressed)
+
+
+def test_noise_floor_is_two_applications_at_the_smaller_n():
+    from engine.loop.calibrate import CONTRASTS, ContrastResult
+    # The smaller side sets the bar: one application there moves the rate
+    # more than one application on the larger side.
+    result = ContrastResult(spec=CONTRASTS[0], interviewed_hits=6,
+                            interviewed_n=6, negative_hits=0, negative_n=9)
+    assert result.noise_floor() == 2 * 100 / 6
+    assert result.required_gap() == 2 * 100 / 6  # above the flat 20
+
+
+def test_flat_threshold_still_governs_at_large_ns():
+    from engine.loop.calibrate import CONTRASTS, ContrastResult
+    # At N=40 two applications is only 5 points, so the flat 20-point
+    # threshold is the binding one. The floor is a max(), never a swap.
+    result = ContrastResult(spec=CONTRASTS[0], interviewed_hits=20,
+                            interviewed_n=40, negative_hits=10, negative_n=40)
+    assert result.noise_floor() == 5.0
+    assert result.required_gap() == 20.0
+
+
+def test_the_seasons_two_proposals_survive_the_noise_floor(tmp_path):
+    # At N=6 the noise floor is 33 points. Both pinned proposals clear it
+    # (69 and 71), so the fixture needs no adjustment.
+    _, report = _report(tmp_path)
+    proposals = _section(report, "## Proposals")
+    assert proposals.count("\n- ") == 2
+    assert "`unlisted_comp_pts`" in proposals and "`rules`" in proposals
