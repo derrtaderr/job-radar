@@ -48,8 +48,11 @@ def test_jd_keywords_drops_a_stopword_even_at_high_frequency():
 def test_jd_keywords_drops_filler_leaked_on_a_real_jd_run_even_at_high_frequency():
     # Observed leaking as fake "keywords" on a real JD run: pronouns/
     # determiners ("that", "who", "every", "what") and generic JD nouns
-    # ("new", "hire", "hiring", "teams", "risk") that carry no ATS signal
-    # no matter how often the posting repeats them.
+    # ("new", "hire", "hiring", "teams") that carry no ATS signal no
+    # matter how often the posting repeats them. "risk" is deliberately
+    # excluded from this filler list — it is a legitimate domain keyword
+    # in fintech/security/compliance JDs and stays in jd_keywords output
+    # (see test_jd_keywords_keeps_risk_as_a_legitimate_domain_keyword).
     jd = (
         "Someone who thrives on ambiguity is exactly the person that we "
         "want. Every new hire joins a hiring squad that spans multiple "
@@ -60,8 +63,21 @@ def test_jd_keywords_drops_filler_leaked_on_a_real_jd_run_even_at_high_frequency
     keywords = ats_check.jd_keywords(jd)
 
     for filler in ("that", "who", "every", "what", "new", "hire",
-                   "hiring", "teams", "risk"):
+                   "hiring", "teams"):
         assert filler not in keywords
+
+
+def test_jd_keywords_keeps_risk_as_a_legitimate_domain_keyword():
+    # "risk" reads as filler in generic JD boilerplate, but it is a real
+    # requirement term in fintech/security/compliance postings (risk
+    # management, credit risk) — losing it there costs more than the
+    # occasional generic leak, so it stays out of STOP_WORDS.
+    jd = ("We need a credit risk analyst to own risk models and risk "
+          "reporting across the portfolio.")
+
+    keywords = ats_check.jd_keywords(jd)
+
+    assert "risk" in keywords
 
 
 def test_jd_keywords_never_surfaces_that_or_who_even_at_higher_frequency():
