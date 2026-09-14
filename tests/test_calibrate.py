@@ -91,6 +91,61 @@ def test_matching_is_case_insensitive():
     assert _bucket_of("no RESPONSE") == "no-response"
 
 
+# --- real-world hyphenated "Closed-*" vocabulary ----------------------------
+#
+# The live tracker writes Outcome as a hyphenated compound with a "Closed-"
+# prefix ("Closed-timed-out", "Closed-no-fit (role pivoted)") rather than the
+# loose English phrases the mapping table above was built against. On the
+# first live run this put 21 of 29 rows into `other`. Each case here is a
+# form actually seen in that run.
+
+def test_closed_prefixed_timed_out_and_no_response():
+    assert _bucket_of("Closed-timed-out") == "timed-out"
+    assert _bucket_of("Closed-no-response") == "no-response"
+
+
+def test_closed_prefixed_filled_is_rejected_later():
+    # The req closed with someone else, without the applicant ever being
+    # evaluated against a decision — the same class as losing after being
+    # considered, not a new one.
+    assert _bucket_of("Closed-filled") == "rejected-later"
+
+
+def test_closed_prefixed_lost_is_rejected_later():
+    assert _bucket_of("Closed-lost") == "rejected-later"
+
+
+def test_closed_lost_prefix_plus_parenthetical_and_case():
+    assert _bucket_of("Closed-Lost (hired a further-along candidate)") == "rejected-later"
+
+
+def test_closed_prefixed_cold_is_no_response():
+    assert _bucket_of("Closed-cold") == "no-response"
+
+
+def test_closed_prefixed_lapsed_is_withdrawn():
+    # Lapsed from the applicant's own inaction is a fact about the
+    # applicant, like a withdrawal — not a posting rejection.
+    assert _bucket_of("Closed-lapsed") == "withdrawn"
+    assert _bucket_of("Closed-lapsed (own action)") == "withdrawn"
+
+
+def test_closed_prefixed_location_mismatch_and_no_fit_are_withdrawn():
+    # Applicant-side disqualification, not a posting rejection.
+    assert _bucket_of("Closed-location-mismatch") == "withdrawn"
+    assert _bucket_of("Closed-no-fit") == "withdrawn"
+    assert _bucket_of("Closed-no-fit (role pivoted)") == "withdrawn"
+
+
+def test_bare_closed_and_tbd_stay_other_verbatim():
+    # Genuinely uninterpreted — no hyphenated tail to normalize against.
+    classes = outcome_classes(_closed(
+        "Cobalt Grid | Data Engineer | 2026-08-20 | Closed | n/a | n/a",
+        "Tessellate | Data Engineer | 2026-08-21 | TBD | n/a | n/a",
+    ))
+    assert [r.get("Outcome") for r in classes["other"]] == ["Closed", "TBD"]
+
+
 def test_unmatched_outcome_lands_in_other_verbatim():
     # The whole point of `other`: an Outcome the mapping never anticipated is
     # VISIBLE, carrying the text the human actually typed.
