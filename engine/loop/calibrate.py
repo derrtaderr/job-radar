@@ -720,9 +720,13 @@ def calibration_report(tracker_text: str, archive_dir, cfg,
                 f"{NEGATIVE_LABEL} N={negative_n}; floor N={min_n}).")
         elif result.gap < MIN_GAP_POINTS:
             suppressed.append(
+                # The bar quoted is the one this contrast actually had to
+                # clear, which at small N is the noise floor rather than the
+                # flat threshold. Citing the flat 20 while the Ns demanded 33
+                # would make the suppression read as a near miss.
                 f"- {result.spec.present_label}: gap below threshold "
-                f"({_pct(result.gap)}-point gap vs the "
-                f"{_pct(MIN_GAP_POINTS)}-point threshold; "
+                f"({_pct(result.gap)}-point gap vs a "
+                f"{_pct(result.required_gap())}-point bar at these Ns; "
                 f"{INTERVIEWED_LABEL} N={interviewed_n}, "
                 f"{NEGATIVE_LABEL} N={negative_n}, floor N={min_n}).")
         elif result.gap < result.noise_floor():
