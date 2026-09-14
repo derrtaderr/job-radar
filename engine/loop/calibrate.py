@@ -95,6 +95,19 @@ def classify_outcome(outcome: str) -> str:
     return "other"
 
 
+def closed_rows(tracker_text: str) -> list:
+    """Every Closed row in TRACKER order.
+
+    The join consumes each archive once, so the order rows arrive in decides
+    who wins a contested archive. Bucket order would let an `offer` row from
+    the bottom of the file claim an archive ahead of a `no-response` row
+    above it, quietly biasing the interviewed side of every contrast upward.
+    File order has no such lean.
+    """
+    table = parse_tracker(tracker_text or "").get(_CLOSED_SECTION)
+    return list(table.rows) if table is not None else []
+
+
 def outcome_classes(tracker_text: str) -> dict:
     """Every Closed row bucketed by its Outcome cell.
 
@@ -117,6 +130,16 @@ def outcome_classes(tracker_text: str) -> dict:
 # substring match degenerates into matching everything, so a two-letter cell
 # must not be allowed to claim an archive.
 _SOFT_MATCH_FLOOR = 4
+
+
+@dataclass
+class AmbiguousMatch:
+    """A Closed row that soft-matched more than one archive and was therefore
+    joined to NONE of them. `candidates` are the slug names it could not
+    choose between, so the report can name them and a human can rename one
+    side or correct the tracker cell."""
+    row: object
+    candidates: list
 
 
 @dataclass
@@ -159,12 +182,18 @@ def _archive_identities(archive_dir: Path) -> list:
         return []
     identities = []
     for slug_dir in sorted(p for p in archive_dir.iterdir() if p.is_dir()):
+        # The fallback identity is the slug with hyphens turned back into
+        # spaces, and it has to be spelled the same way on BOTH branches — a
+        # raw "cobalt-grid-data-engineer" can never substring-match a tracker
+        # cell reading "Cobalt Grid", so a fallback left hyphenated is one
+        # that never fires while looking handled.
+        slug_identity = slug_dir.name.replace("-", " ")
         try:
             meta = read_outcome(slug_dir)
-            company = meta.get("company") or slug_dir.name
-            role = meta.get("role") or slug_dir.name
+            company = meta.get("company") or slug_identity
+            role = meta.get("role") or slug_identity
         except (OSError, ArchiveError, KeyError, ValueError):
-            company = role = slug_dir.name.replace("-", " ")
+            company = role = slug_identity
         identities.append((slug_dir, company, role))
     return identities
 
@@ -172,45 +201,76 @@ def _archive_identities(archive_dir: Path) -> list:
 def join_archives(closed_rows, archive_dir) -> tuple:
     """Pair Closed tracker rows with the archived applications behind them.
 
-    Returns `(joined, unjoined)` — a list of JoinedApplication and a list of
-    the Rows that matched nothing. BOTH are returned and both are counted in
-    the report header, because the join rate is a data-quality finding in its
-    own right: a report built on four of twenty applications is saying
-    something very different from one built on eighteen, and a function that
-    returned only the joined side would hide exactly that difference.
+    Returns `(joined, unjoined, ambiguous)`. `unjoined` is the complete
+    complement of `joined` — every row that ended up attached to nothing,
+    ambiguous ones included — so `len(joined) + len(unjoined)` always equals
+    the number of rows in. `ambiguous` is the subset of those that failed
+    because too MANY archives matched, carried separately only so the report
+    can name them and their candidates.
 
-    Matching needs company AND role to agree (soft-matched in either
-    direction). Company alone is not enough — the same employer posting two
-    roles is two applications, and attributing one posting's JD to the
-    other's outcome is the quiet way to corrupt every contrast downstream.
-    Each archive is consumed at most once, so a legitimate re-application to
-    the same company and role (which the Closed section allows by design)
-    cannot double-count the one archive behind it.
+    All three are returned because the join rate is a data-quality finding in
+    its own right: a report built on four of twenty applications says
+    something very different from one built on eighteen.
+
+    ## Why exact equality has to run first, across ALL candidates
+
+    Substring matching in either direction is what lets "Harborlight (via
+    referral)" find "Harborlight". It is also what silently swaps two
+    applications: "Data Engineer" is a substring of "Analytics Data
+    Engineer", so a first-match-wins substring scan over one company's two
+    archives hands each row the other's JD — with unjoined empty and a 100%
+    join rate, which reads as a clean run while every contrast downstream is
+    scored against the wrong postings. There is no symptom.
+
+    So the order is: normalized exact equality on company AND role, checked
+    against every unclaimed archive, wins outright. Only when nothing matches
+    exactly does substring run, and only when it finds EXACTLY ONE candidate
+    is that candidate used. Two or more is an ambiguity, and a guess there is
+    precisely the bug above, so the row joins nothing and says which archives
+    it could not choose between.
+
+    Company alone is never enough: one employer posting two roles is two
+    applications. Each archive is consumed at most once, so a legitimate
+    re-application to the same company and role (which the Closed section
+    allows by design) cannot double-count the one archive behind it. Rows are
+    processed in the order given, which the caller keeps as TRACKER order.
     """
     identities = _archive_identities(archive_dir)
     claimed = set()
-    joined = []
-    unjoined = []
+    joined, unjoined, ambiguous = [], [], []
 
     for row in closed_rows:
         company = row.get("Company") or ""
         role = row.get("Role") or ""
-        match = None
-        for idx, (slug_dir, arch_company, arch_role) in enumerate(identities):
-            if idx in claimed:
-                continue
-            if _soft_match(company, arch_company) and _soft_match(role, arch_role):
-                match = (idx, slug_dir, arch_company, arch_role)
-                break
-        if match is None:
-            unjoined.append(row)
-            continue
-        idx, slug_dir, arch_company, arch_role = match
-        claimed.add(idx)
-        joined.append(JoinedApplication(
-            row=row, archive=slug_dir, company=arch_company, role=arch_role))
+        available = [(idx, slug_dir, arch_company, arch_role)
+                     for idx, (slug_dir, arch_company, arch_role)
+                     in enumerate(identities) if idx not in claimed]
 
-    return joined, unjoined
+        exact = [c for c in available
+                 if _normalize_tracker_cell(company) == _normalize_tracker_cell(c[2])
+                 and _normalize_tracker_cell(role) == _normalize_tracker_cell(c[3])]
+        if exact:
+            # More than one exact match means genuine duplicate archives for
+            # the same company and role; taking the first in slug order is
+            # deterministic, and the next identical row takes the next one.
+            candidates = exact[:1]
+        else:
+            candidates = [c for c in available
+                          if _soft_match(company, c[2]) and _soft_match(role, c[3])]
+
+        if len(candidates) == 1:
+            idx, slug_dir, arch_company, arch_role = candidates[0]
+            claimed.add(idx)
+            joined.append(JoinedApplication(
+                row=row, archive=slug_dir, company=arch_company, role=arch_role))
+            continue
+
+        unjoined.append(row)
+        if len(candidates) > 1:
+            ambiguous.append(AmbiguousMatch(
+                row=row, candidates=[c[1].name for c in candidates]))
+
+    return joined, unjoined, ambiguous
 
 
 # --- contrasts --------------------------------------------------------------
@@ -437,15 +497,25 @@ class ContrastResult:
                 f"— {_pct(self.gap)}-point gap")
 
 
-def contrast_results(joined, cfg) -> list:
-    """One ContrastResult per CONTRASTS entry, in that fixed order."""
+def group_joined(joined) -> tuple:
+    """Joined applications split into (interviewed, negative). The one place
+    the grouping is computed, so the header and the contrasts can never
+    disagree about how many applications are on each side."""
     interviewed, negative = [], []
     for application in joined:
         bucket = classify_outcome(application.row.get("Outcome"))
         if bucket in INTERVIEWED_CLASSES:
-            interviewed.append(application_features(application, cfg))
+            interviewed.append(application)
         elif bucket in NEGATIVE_CLASSES:
-            negative.append(application_features(application, cfg))
+            negative.append(application)
+    return interviewed, negative
+
+
+def contrast_results(joined, cfg) -> list:
+    """One ContrastResult per CONTRASTS entry, in that fixed order."""
+    interviewed_apps, negative_apps = group_joined(joined)
+    interviewed = [application_features(a, cfg) for a in interviewed_apps]
+    negative = [application_features(a, cfg) for a in negative_apps]
 
     return [
         ContrastResult(
@@ -459,12 +529,17 @@ def contrast_results(joined, cfg) -> list:
     ]
 
 
-def _summary_lines(classes: dict, joined, unjoined, results, min_n: int) -> list:
+def _summary_lines(classes: dict, joined, unjoined, ambiguous, min_n: int) -> list:
     total = sum(len(rows) for rows in classes.values())
     n_joined = len(joined)
     join_pct = _pct(_rate(n_joined, total))
-    interviewed_n = results[0].interviewed_n if results else 0
-    negative_n = results[0].negative_n if results else 0
+    # Counted off the joined population itself, never read from a contrast
+    # result. A contrast's N is a derived number that a future contrast with
+    # its own determinability rule could legitimately shrink, at which point
+    # the header would be quietly describing one contrast instead of the
+    # group it claims to describe.
+    interviewed, negative = group_joined(joined)
+    interviewed_n, negative_n = len(interviewed), len(negative)
 
     lines = [
         "## Summary",
@@ -472,9 +547,21 @@ def _summary_lines(classes: dict, joined, unjoined, results, min_n: int) -> list
         f"Closed applications: {total}",
         f"Joined to an archive: {n_joined} ({join_pct}%)",
         f"Unjoined (no archive match): {len(unjoined)}",
-        "",
-        "Outcome classes:",
     ]
+    if ambiguous:
+        # Named, not just counted. An ambiguity is fixable in about a minute
+        # once a human can see WHICH two archives collided; as a bare number
+        # it is an unactionable complaint.
+        lines.append(
+            f"Ambiguous (more than one archive matched, so joined to none; "
+            f"counted in unjoined above): {len(ambiguous)}")
+        for match in ambiguous:
+            company = (match.row.get("Company") or "").strip()
+            role = (match.row.get("Role") or "").strip()
+            lines.append(
+                f"  - {company} / {role}: "
+                f"{', '.join(sorted(match.candidates))}")
+    lines += ["", "Outcome classes:"]
     for bucket in OUTCOME_BUCKETS:
         lines.append(f"- {bucket}: {len(classes[bucket])}")
         if bucket == "other" and classes[bucket]:
@@ -502,7 +589,11 @@ def _summary_lines(classes: dict, joined, unjoined, results, min_n: int) -> list
         "interpreted yet.",
         "",
         f"Proposal floor: both sides need N >= {min_n}, and the rate gap must "
-        f"be at least {_pct(MIN_GAP_POINTS)} points.",
+        f"be at least {_pct(MIN_GAP_POINTS)} points and at least two "
+        f"applications of movement at these Ns.",
+        "",
+        "Contrasts use the CURRENT config; rules/weights edited since an "
+        "application was decided will show as near-misses.",
     ]
     return lines
 
@@ -522,19 +613,19 @@ def calibration_report(tracker_text: str, archive_dir, cfg,
     kill_rules and is never modified.
     """
     classes = outcome_classes(tracker_text)
-    closed_rows = [row for bucket in OUTCOME_BUCKETS for row in classes[bucket]]
-    joined, unjoined = join_archives(closed_rows, archive_dir)
+    rows = closed_rows(tracker_text)
+    joined, unjoined, ambiguous = join_archives(rows, archive_dir)
     results = contrast_results(joined, cfg)
 
     lines = ["# Calibration report", ""]
-    lines += _summary_lines(classes, joined, unjoined, results, min_n)
+    lines += _summary_lines(classes, joined, unjoined, ambiguous, min_n)
 
     lines += [
         "",
         "## Outcome contrasts",
         "",
         f"Joined applications only ({len(joined)} of "
-        f"{len(closed_rows)}). Each line reads: feature present among "
+        f"{len(rows)}). Each line reads: feature present among "
         f"{INTERVIEWED_LABEL} vs among {NEGATIVE_LABEL}.",
         "",
     ]
