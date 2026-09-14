@@ -70,7 +70,14 @@ ALLOWED_CODEPOINTS = (
 
 
 def jd_keywords(jd_text: str, max_terms: int = 30) -> list[str]:
-    tokens = [tok.lower() for tok in TOKEN_RE.findall(jd_text)]
+    # Strip only TRAILING dots (sentence-final punctuation the token regex
+    # greedily swallows) so "kubernetes." and "kubernetes" count as the same
+    # term. Embedded dots (node.js) survive since rstrip stops at the first
+    # non-dot char from the end. A token that strips down to nothing useful
+    # (empty, or under the regex's own 3-char floor) is dropped rather than
+    # miscounted.
+    tokens = [tok.lower().rstrip(".") for tok in TOKEN_RE.findall(jd_text)]
+    tokens = [tok for tok in tokens if len(tok) >= 3]
     tokens = [tok for tok in tokens if tok not in STOP_WORDS]
 
     counts = Counter(tokens)
@@ -119,19 +126,13 @@ def ats_report(pdf_path, jd_text: str, contact: dict[str, str]) -> tuple[bool, s
     keywords = jd_keywords(jd_text)
     hits, gaps = coverage(text, keywords)
 
-    lines = ["# ATS check", ""]
+    hard_failure_lines = [f"- {v}" for v in contact_violations]
+    if garble_violation:
+        hard_failure_lines.append(f"- {garble_violation}")
+    if not hard_failure_lines:
+        hard_failure_lines = ["- none"]
 
-    if contact_violations or garble_violation:
-        lines.append("## Hard failures")
-        for violation in contact_violations:
-            lines.append(f"- {violation}")
-        if garble_violation:
-            lines.append(f"- {garble_violation}")
-        lines.append("")
-    else:
-        lines.append("## Hard failures")
-        lines.append("- none")
-        lines.append("")
+    lines = ["# ATS check", "", "## Hard failures", *hard_failure_lines, ""]
 
     lines.append("## Keyword coverage")
     lines.append(f"Hits ({len(hits)}): {', '.join(hits) if hits else 'none'}")
