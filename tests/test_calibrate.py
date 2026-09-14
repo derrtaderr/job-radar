@@ -307,11 +307,13 @@ def test_exactly_two_proposals_clear_the_floor_with_pinned_ns(tmp_path):
     assert (
         "- `weights.yaml`: consider lowering `unlisted_comp_pts` — "
         "6 of 7 negative-outcome applications had unlisted comp, "
-        "vs 1 of 6 interviewed (69-point gap, floor N=5)." in proposals)
+        "vs 1 of 6 interviewed (69-point gap vs a 33-point bar at these Ns, "
+        "floor N=5)." in proposals)
     assert (
         "- `rules.yaml`: consider tightening `rules` — "
         "6 of 6 interviewed applications had no kill-rule language in the JD, "
-        "vs 2 of 7 negative-outcome (71-point gap, floor N=5)." in proposals)
+        "vs 2 of 7 negative-outcome (71-point gap vs a 33-point bar at these "
+        "Ns, floor N=5)." in proposals)
 
 
 def test_suppressed_section_names_both_underpowered_contrasts(tmp_path):

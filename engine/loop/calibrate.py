@@ -443,6 +443,29 @@ class ContrastResult:
         5-point gap, and rounding first would report 4."""
         return abs(self.interviewed_rate - self.negative_rate)
 
+    def noise_floor(self) -> float:
+        """The gap that two applications of movement would produce on the
+        SMALLER side, in percentage points.
+
+        A flat threshold alone is not a floor at small N. At min_n=5 one
+        application is worth exactly 20 points, so a 5-of-5 versus 4-of-5
+        split cleared a 20-point bar and proposed a config change off a
+        single person's hiring decision. Two applications is the minimum
+        that can be called a pattern rather than an anecdote, and the
+        smaller side sets the bar because one application moves its rate
+        further.
+        """
+        smaller = min(self.interviewed_n, self.negative_n)
+        if smaller <= 0:
+            return float("inf")
+        return 2 * 100.0 / smaller
+
+    def required_gap(self) -> float:
+        """The gap this contrast must actually clear — a max(), never a
+        swap. At large N two applications is a few points and the flat
+        threshold binds; at small N the noise floor does."""
+        return max(MIN_GAP_POINTS, self.noise_floor())
+
     @property
     def underpowered_for(self):
         """(interviewed_n, negative_n) when either side is below the floor —
@@ -646,10 +669,24 @@ def calibration_report(tracker_text: str, archive_dir, cfg,
                 f"{_pct(MIN_GAP_POINTS)}-point threshold; "
                 f"{INTERVIEWED_LABEL} N={interviewed_n}, "
                 f"{NEGATIVE_LABEL} N={negative_n}, floor N={min_n}).")
+        elif result.gap < result.noise_floor():
+            # Named for what it is. "Below threshold" would be misleading
+            # here — the gap DID clear the stated threshold, and what stopped
+            # it is that at these Ns the whole gap is one application moving.
+            smaller = min(interviewed_n, negative_n)
+            suppressed.append(
+                f"- {result.spec.present_label}: gap within one-application "
+                f"noise at these Ns ({_pct(result.gap)}-point gap vs a "
+                f"{_pct(result.noise_floor())}-point floor, which is two "
+                f"applications at N={smaller}; "
+                f"{INTERVIEWED_LABEL} N={interviewed_n}, "
+                f"{NEGATIVE_LABEL} N={negative_n}, floor N={min_n}).")
         else:
             proposals.append(
                 f"- {result.suggestion()} — {result.evidence()} "
-                f"({_pct(result.gap)}-point gap, floor N={min_n}).")
+                f"({_pct(result.gap)}-point gap vs a "
+                f"{_pct(result.required_gap())}-point bar at these Ns, "
+                f"floor N={min_n}).")
 
     lines += ["", "## Proposals", ""]
     if proposals:
