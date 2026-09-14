@@ -43,9 +43,14 @@ def _jd_says_remote(text):
 # Rule-tuning candidate 2 (Task 7): an office city stated only in the body, and
 # in-office-cadence language that defeats a remote-language override.
 _CITY = r"([A-Z][a-z]+(?: [A-Z][a-z]+)?(?:, [A-Z]{2})?)"
-_BODY_LOC = re.compile(r"(?:based|located) in " + _CITY
-                       + r"|office in " + _CITY
-                       + r"|on[- ]?site in " + _CITY)
+# Verb alternations are wrapped in a scoped inline (?i:...) group so "Based in
+# Chicago." (sentence-initial capital) matches just like "based in Chicago"
+# does. The _CITY capture sits OUTSIDE those groups on purpose — it must stay
+# case-sensitive, or "we ship data based in reality" would false-positive on
+# "reality" as a city.
+_BODY_LOC = re.compile(r"(?i:based|located) in " + _CITY
+                       + r"|(?i:office) in " + _CITY
+                       + r"|(?i:on[- ]?site) in " + _CITY)
 _OFFICE_CADENCE = re.compile(
     r"\d+ days? (?:a |per )?week in (?:the |our )?office|days? in[- ]office"
     r"|hybrid (?:schedule|work model|role)|in[- ]office \d+ days?"
