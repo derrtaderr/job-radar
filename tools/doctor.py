@@ -224,6 +224,33 @@ def _check_gitignore(repo_root: Path) -> CheckResult:
         f"{gitignore_path} has all {len(GITIGNORE_REQUIRED_LINES)} required lines", "")
 
 
+def _check_tracker(config, config_error: "str | None") -> CheckResult:
+    if config_error is not None:
+        return CheckResult(
+            "tracker", "skip",
+            "config didn't load — see the 'config' check above", "")
+
+    if config.tracker_path is None:
+        return CheckResult(
+            "tracker", "skip",
+            "no tracker: configured in settings.yaml — nothing to check", "")
+
+    if not config.tracker_path.exists():
+        return CheckResult(
+            "tracker", False,
+            f"tracker configured at {config.tracker_path} but the file does not exist",
+            f"create {config.tracker_path} or fix settings.yaml tracker:")
+
+    violations = tracker_check(config.tracker_path.read_text())
+    if violations:
+        return CheckResult(
+            "tracker", False, "; ".join(violations),
+            f"edit {config.tracker_path} to fix the violation(s) above")
+
+    return CheckResult(
+        "tracker", True, f"{config.tracker_path} matches the Global Constraints contract", "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -244,4 +271,5 @@ def run_checks(repo_root, config_dir) -> list:
         _check_profile(config_dir, config_error),
         _check_privacy_hook(repo_root),
         _check_gitignore(repo_root),
+        _check_tracker(config, config_error),
     ]

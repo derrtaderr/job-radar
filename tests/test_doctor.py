@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixtures_tracker import VALID_TRACKER
 from tools import doctor
 
 EXAMPLE = Path(__file__).parent.parent / "config.example"
@@ -40,6 +41,16 @@ def _config_dir(tmp_path):
     cfg_dir = tmp_path / "config"
     shutil.copytree(EXAMPLE, cfg_dir)
     return cfg_dir
+
+
+def _configure_tracker(cfg_dir, rel_path: str) -> None:
+    """Point settings.yaml's `tracker:` key at rel_path (resolved against
+    cfg_dir.parent, same as load_config)."""
+    settings = cfg_dir / "settings.yaml"
+    kept = [line for line in settings.read_text().splitlines()
+            if not line.startswith("tracker:")]
+    kept.append(f"tracker: {rel_path}")
+    settings.write_text("\n".join(kept) + "\n")
 
 
 def _result(results, name):
@@ -277,4 +288,53 @@ def test_gitignore_fails_when_file_does_not_exist(tmp_path):
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     results = doctor.run_checks(tmp_path, _config_dir(tmp_path))
     result = _result(results, "gitignore integrity")
+    assert result.ok is False
+
+
+# --- check 8: tracker check (only when tracker: is configured) --------------
+
+def test_tracker_skips_when_not_configured(tmp_path):
+    # config.example's settings.yaml ships `tracker: null`
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "tracker")
+    assert result.ok == "skip"
+
+
+def test_tracker_skips_when_config_does_not_load_at_all(tmp_path):
+    repo = _git_repo(tmp_path)
+    missing_dir = tmp_path / "config"  # never created — check 4 FAILs
+    results = doctor.run_checks(repo, missing_dir)
+    result = _result(results, "tracker")
+    assert result.ok == "skip"
+
+
+def test_tracker_ok_when_configured_and_valid(tmp_path):
+    cfg_dir = _config_dir(tmp_path)
+    _configure_tracker(cfg_dir, "./tracker.md")
+    (tmp_path / "tracker.md").write_text(VALID_TRACKER)
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "tracker")
+    assert result.ok is True
+
+
+def test_tracker_fails_and_surfaces_violations_when_configured_but_broken(tmp_path):
+    cfg_dir = _config_dir(tmp_path)
+    _configure_tracker(cfg_dir, "./tracker.md")
+    (tmp_path / "tracker.md").write_text("## Active\nno table here\n")
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "tracker")
+    assert result.ok is False
+    assert "missing required section" in result.detail
+    assert "Closed" in result.detail
+
+
+def test_tracker_fails_when_configured_but_file_missing(tmp_path):
+    cfg_dir = _config_dir(tmp_path)
+    _configure_tracker(cfg_dir, "./tracker.md")  # never written
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "tracker")
     assert result.ok is False
