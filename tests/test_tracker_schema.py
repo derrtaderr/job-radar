@@ -18,6 +18,8 @@ from tests.fixtures_tracker import (
     MISSING_REQUIRED_COLUMN_ACTIVE,
     MISSING_REQUIRED_COLUMN_CLOSED,
     MORE_CELLS_THAN_HEADERS,
+    OVERFLOW_ROW_WITH_BAD_DATE_IN_ALIGNED_COLUMN,
+    OVERFLOW_ROWS_WITH_DUPLICATE_IN_ALIGNED_COLUMNS,
     VALID_TRACKER,
 )
 
@@ -252,6 +254,30 @@ def test_more_cells_than_headers_drops_overflow_and_flags_line():
 
     violations = tracker_check(MORE_CELLS_THAN_HEADERS)
     assert any("line 5" in v and "4 cells" in v and "3" in v for v in violations)
+
+
+# --- overflow rows (more cells than headers) keep aligned leading cells ----
+# Unlike a too-FEW-cells row, an overflow row's leading cells still line up
+# with the headers — only the trailing excess is unpositioned. The
+# cell-count violation always fires; the ISO-date and duplicate checks now
+# also run against those still-aligned leading cells, where a too-FEW-cells
+# row keeps full suppression (alignment is genuinely lost there).
+
+def test_overflow_row_bad_date_in_aligned_column_yields_both_violations():
+    violations = tracker_check(OVERFLOW_ROW_WITH_BAD_DATE_IN_ALIGNED_COLUMN)
+    assert any("line 5" in v and "4 cells" in v and "3" in v for v in violations)
+    assert any("Last touch" in v and "TBD" in v for v in violations)
+    assert len(violations) == 2
+
+
+def test_overflow_rows_duplicate_in_aligned_columns_still_flagged():
+    violations = tracker_check(OVERFLOW_ROWS_WITH_DUPLICATE_IN_ALIGNED_COLUMNS)
+    cell_count = [v for v in violations if "cells" in v]
+    dup = [v for v in violations if "duplicate" in v.lower()]
+    assert len(cell_count) == 2  # both overflow rows still flagged individually
+    assert len(dup) == 1
+    assert "Cobalt Grid" in dup[0]
+    assert "5" in dup[0] and "6" in dup[0]
 
 
 # --- a cell-count mismatch suppresses downstream column checks on that row ---
