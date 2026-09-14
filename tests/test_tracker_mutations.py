@@ -412,3 +412,60 @@ def test_cli_touch_unknown_column_errors_without_writing(tmp_path, capsys):
                    "--column", "Not A Column", "--value", "x"])
     assert rc == 1
     assert path.read_text() == original
+
+
+# --- touch_row on a table whose rows have no trailing pipe ------------------
+# "| a | b | c" is a legal markdown row and tracker_check passes it clean, so
+# touch_row is reachable with it. Splicing between pipe[i] and pipe[i+1] then
+# walks off the end on the LAST column. It failed closed, but with a raw
+# IndexError rather than anything a caller could act on.
+
+_NO_TRAILING_PIPE = (
+    "## Active\n\n"
+    "| Company | Role | Last touch\n"
+    "|---|---|---\n"
+    "| Cobalt Grid | Data Engineer | 2026-09-10\n\n"
+    "## Closed\n\n"
+    "| Company | Role | Date closed | Outcome\n"
+    "|---|---|---|---\n")
+
+
+def test_the_fixture_really_is_check_clean():
+    # If this ever starts reporting violations the test below is proving
+    # nothing — the shape would be rejected upstream instead.
+    from engine.loop.tracker_schema import tracker_check
+    assert tracker_check(_NO_TRAILING_PIPE) == []
+
+
+def test_touch_last_column_without_a_trailing_pipe(tmp_path):
+    from engine.loop.tracker_edit import touch_row
+    out = touch_row(_NO_TRAILING_PIPE, "Active", "Cobalt Grid",
+                    "Data Engineer", "Last touch", "2026-09-13")
+    assert "| Cobalt Grid | Data Engineer | 2026-09-13" in out
+    assert "2026-09-10" not in out
+
+
+def test_touch_mid_column_without_a_trailing_pipe_is_unaffected(tmp_path):
+    # The control: a column with a pipe after it still splices exactly as it
+    # always did, so the fix cannot be a blanket "write to end of line".
+    from engine.loop.tracker_edit import touch_row
+    out = touch_row(_NO_TRAILING_PIPE, "Active", "Cobalt Grid",
+                    "Data Engineer", "Role", "Senior Data Engineer")
+    assert "| Cobalt Grid | Senior Data Engineer | 2026-09-10" in out
+
+
+def test_touch_last_column_preserves_a_trailing_pipe_when_there_is_one(tmp_path):
+    # The normal shape must keep its closing pipe — the end-of-line splice is
+    # only for rows that genuinely have no pipe after the target cell.
+    from engine.loop.tracker_edit import touch_row
+    text = (
+        "## Active\n\n"
+        "| Company | Role | Last touch |\n"
+        "|---|---|---|\n"
+        "| Cobalt Grid | Data Engineer | 2026-09-10 |\n\n"
+        "## Closed\n\n"
+        "| Company | Role | Date closed | Outcome |\n"
+        "|---|---|---|---|\n")
+    out = touch_row(text, "Active", "Cobalt Grid", "Data Engineer",
+                    "Last touch", "2026-09-13")
+    assert "| Cobalt Grid | Data Engineer | 2026-09-13 |" in out
