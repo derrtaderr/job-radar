@@ -231,19 +231,20 @@ for name in ('resume', 'cover'):
 (`FileNotFoundError: typst binary not found` is the one exception it does raise, and it means
 `brew install typst` — an environment problem, not a document problem.)
 
-Then verify each PDF. `--max-pages` for the resume is the registry `page_limit` read in
-Step 3, never a number typed from memory; the cover letter is one page. `--must-contain`
-pins the contact literals, because a resume that silently dropped its email is a failure
-nobody catches until the callback doesn't come.
+Then verify each PDF. `--max-pages` for BOTH the resume and the cover letter comes from the
+registry `page_limit` read for that kind in Step 3 — never a number typed from memory, and
+never assumed to be one page for the cover letter just because that is the usual answer.
+`--must-contain` pins the contact literals, because a resume that silently dropped its email
+is a failure nobody catches until the callback doesn't come.
 
 ```bash
 .venv/bin/python tools/verify_pdf.py apply-out/<company>-<slug>/resume.pdf \
-  --max-pages <registry page_limit> \
+  --max-pages <registry page_limit for the resume kind> \
   --must-contain 'alex.rivera@example.com' \
   --must-contain '(303) 555-0142'
 
 .venv/bin/python tools/verify_pdf.py apply-out/<company>-<slug>/cover.pdf \
-  --max-pages 1 \
+  --max-pages <registry page_limit for the cover kind> \
   --must-contain 'alex.rivera@example.com'
 ```
 

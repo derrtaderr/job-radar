@@ -57,6 +57,23 @@ draft into repeatedly.
 
 ## Step 2 — Copy into templates/custom/
 
+**Before copying, check whether the destination filename already exists.** A silent overwrite
+would rebind whatever registry entry already points at that file to new content — the entry's
+name and metadata stay the same, but the source underneath it changes, which is a much harder
+break to notice than a failed copy.
+
+```bash
+ls templates/custom/<file>.typ 2>/dev/null
+```
+
+If that file exists, **stop before running `cp`.** Look up which registered entry, if any,
+points at `templates/custom/<file>.typ` (`grep` `templates/registry.yaml` for the path, or
+load the registry and check each template's `source`), and say which name owns it. Ask the
+human whether to pick a different destination filename or to proceed deliberately, knowing it
+rebinds that entry. Do not overwrite on their behalf without that answer.
+
+Only once the destination is confirmed clear (or the overwrite is a knowing yes):
+
 ```bash
 mkdir -p templates/custom
 cp <source path> templates/custom/<file>.typ
