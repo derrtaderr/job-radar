@@ -110,7 +110,8 @@ submitted — the archived resume's own text, the posting, and the dated log —
 follow-ups per application, where the cap counts drafts rather than sends, because a draft you
 read and never sent still spent the slot and a counter that waits on you to report back drifts
 low and stops capping anything. Both commands write to exactly two places, your tracker and
-your archive, and every edit prints a unified diff before it touches the file. When enough
+your archive: every tracker edit prints a unified diff before it touches the file, while the
+archive writes are silent appends, so the commands quote those back to you instead. When enough
 applications have resolved, **`tools/calibrate.py`** joins your Closed rows to their archives
 and proposes changes to `config/` — proposals only, gated behind a minimum-N floor on *both*
 sides of every comparison, with every contrast that failed that floor named alongside its
@@ -119,6 +120,6 @@ confident advice. **Nothing in this loop sends anything and nothing edits your c
 follow-ups are text you copy and send yourself, calibration has no `--apply` flag and will not
 get one, and applying stays your hand on the button exactly as it is in `/apply`.
 
-**Run drafting commands from the repo root**, the same as everything else in this README —
-paths inside `/apply` and `/add-template` are repo-relative and assume that working
-directory.
+**Run every command from the repo root**, the same as everything else in this README — paths
+inside `/apply`, `/add-template`, `/outcome`, and `/followup` are repo-relative and assume that
+working directory, and so is `tools/calibrate.py`.

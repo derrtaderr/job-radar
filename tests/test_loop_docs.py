@@ -12,6 +12,10 @@ whose absence changes what the command DOES, not how it reads:
   step; a reader who misses this looks for a send flag that must not exist);
 - a close suggests a calibration run (the only thing that closes the loop
   from outcomes back to the judgment in config/);
+- the carry-forward lesson comes from the human (drop it and the command
+  starts generating plausible wisdom into a permanent record);
+- offers and hires are recorded only on an explicit word (the one place a
+  wrong guess is later read back by a calibration run as fact);
 - archiving happens before the tracker move (the ordering that makes a
   half-failed record recoverable);
 - both docs open with the repo-root + `.venv/bin/python` preamble, the same
@@ -56,6 +60,15 @@ def test_outcome_suggests_a_calibration_run_on_every_close():
 
 def test_outcome_archives_before_it_edits_the_tracker():
     assert "Archive first, then move the tracker row." in _doc("outcome.md")
+
+
+def test_outcome_makes_the_human_supply_the_carry_forward_lesson():
+    assert ("The human supplies the carry-forward lesson. Ask for it; do not "
+            "write one.") in _doc("outcome.md")
+
+
+def test_outcome_records_offers_only_on_an_explicit_word():
+    assert "get recorded only on the human's explicit word." in _doc("outcome.md")
 
 
 def test_both_docs_carry_the_repo_root_preamble():
