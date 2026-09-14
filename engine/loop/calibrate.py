@@ -31,7 +31,12 @@ engine/draft/compile.py vs the `compile` builtin.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
+from engine.loop.archive import ArchiveError, read_outcome
 from engine.loop.tracker_schema import parse_tracker
+from engine.radar.tracker import _normalize_tracker_cell
 
 # Fixed bucket order. Every one is always a key in the returned dict, even
 # when empty — a class that silently vanishes from the report reads as a
@@ -106,3 +111,103 @@ def outcome_classes(tracker_text: str) -> dict:
     for row in table.rows:
         classes[classify_outcome(row.get("Outcome"))].append(row)
     return classes
+
+
+# Same floor the radar's own tracker matching uses: below four characters a
+# substring match degenerates into matching everything, so a two-letter cell
+# must not be allowed to claim an archive.
+_SOFT_MATCH_FLOOR = 4
+
+
+@dataclass
+class JoinedApplication:
+    """One Closed tracker row paired with the archive directory behind it.
+    `row` is the tracker_schema.Row (the outcome side); `archive` is the
+    slug directory (the JD and posting side). Contrasts need both — the
+    outcome comes from the tracker, every scored feature comes from the
+    archive."""
+    row: object
+    archive: Path
+    company: str
+    role: str
+
+
+def _soft_match(left: str, right: str) -> bool:
+    """Normalized substring match in either direction, floored at four
+    characters. The two sides are written by different authors and at
+    different times — a tracker cell says "Harborlight (via referral)"
+    where an archive says "Harborlight" — so exact equality would miss real
+    joins and inflate the unjoined count into a false data-quality alarm."""
+    a = _normalize_tracker_cell(left)
+    b = _normalize_tracker_cell(right)
+    if not a or not b or min(len(a), len(b)) < _SOFT_MATCH_FLOOR:
+        return False
+    return a in b or b in a
+
+
+def _archive_identities(archive_dir: Path) -> list:
+    """(slug_dir, company, role) for every archived application, in sorted
+    slug order so the join never depends on filesystem listing order.
+
+    An archive whose outcome.md is missing or malformed contributes its SLUG
+    as both company and role rather than being skipped — the slug usually
+    carries the same two facts, and a silently skipped archive would show up
+    as a phantom unjoined row with no way to tell the two causes apart.
+    """
+    archive_dir = Path(archive_dir)
+    if not archive_dir.is_dir():
+        return []
+    identities = []
+    for slug_dir in sorted(p for p in archive_dir.iterdir() if p.is_dir()):
+        try:
+            meta = read_outcome(slug_dir)
+            company = meta.get("company") or slug_dir.name
+            role = meta.get("role") or slug_dir.name
+        except (OSError, ArchiveError, KeyError, ValueError):
+            company = role = slug_dir.name.replace("-", " ")
+        identities.append((slug_dir, company, role))
+    return identities
+
+
+def join_archives(closed_rows, archive_dir) -> tuple:
+    """Pair Closed tracker rows with the archived applications behind them.
+
+    Returns `(joined, unjoined)` — a list of JoinedApplication and a list of
+    the Rows that matched nothing. BOTH are returned and both are counted in
+    the report header, because the join rate is a data-quality finding in its
+    own right: a report built on four of twenty applications is saying
+    something very different from one built on eighteen, and a function that
+    returned only the joined side would hide exactly that difference.
+
+    Matching needs company AND role to agree (soft-matched in either
+    direction). Company alone is not enough — the same employer posting two
+    roles is two applications, and attributing one posting's JD to the
+    other's outcome is the quiet way to corrupt every contrast downstream.
+    Each archive is consumed at most once, so a legitimate re-application to
+    the same company and role (which the Closed section allows by design)
+    cannot double-count the one archive behind it.
+    """
+    identities = _archive_identities(archive_dir)
+    claimed = set()
+    joined = []
+    unjoined = []
+
+    for row in closed_rows:
+        company = row.get("Company") or ""
+        role = row.get("Role") or ""
+        match = None
+        for idx, (slug_dir, arch_company, arch_role) in enumerate(identities):
+            if idx in claimed:
+                continue
+            if _soft_match(company, arch_company) and _soft_match(role, arch_role):
+                match = (idx, slug_dir, arch_company, arch_role)
+                break
+        if match is None:
+            unjoined.append(row)
+            continue
+        idx, slug_dir, arch_company, arch_role = match
+        claimed.add(idx)
+        joined.append(JoinedApplication(
+            row=row, archive=slug_dir, company=arch_company, role=arch_role))
+
+    return joined, unjoined
