@@ -189,6 +189,20 @@ def test_config_surfaces_configerror_message_verbatim(tmp_path):
     assert "bad yaml in settings.yaml" in result.detail
 
 
+def test_config_fix_is_edit_not_cp_when_config_dir_exists_but_a_value_is_bad(tmp_path):
+    # `cp -r config.example config` under a POPULATED config/ destroys real
+    # judgment (kill rules, comp floor, claim ledger) that no `git checkout`
+    # brings back. That fix line is only correct when config/ never existed —
+    # once it exists, the fix is editing the file the error already names.
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "settings.yaml").write_text("not: valid: yaml: [")
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "config")
+    assert result.ok is False
+    assert result.fix == "edit the file named in the error above"
+
+
 # --- check 6: profile.md schema (reuses engine.profile_schema) --------------
 
 def test_profile_ok_when_config_example_copied_verbatim(tmp_path):
