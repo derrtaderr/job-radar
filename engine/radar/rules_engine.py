@@ -40,6 +40,15 @@ def _jd_says_remote(text):
     return None
 
 
+def jd_says_remote(text):
+    """Public name for the remote-language detector above, returning the
+    quoted evidence or None. engine/loop/calibrate.py contrasts remote
+    language against application outcomes and needs this; reaching across
+    packages for `_jd_says_remote` would make any refactor here break the
+    calibrator silently, so the behavior carries a supported name instead."""
+    return _jd_says_remote(text)
+
+
 # Rule-tuning candidate 2 (Task 7): an office city stated only in the body, and
 # in-office-cadence language that defeats a remote-language override.
 _CITY = r"([A-Z][a-z]+(?: [A-Z][a-z]+)?(?:, [A-Z]{2})?)"
