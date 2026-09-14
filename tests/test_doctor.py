@@ -60,7 +60,7 @@ def test_check_result_status_reports_ok_warn_fail():
 # --- check 1: python version -------------------------------------------------
 
 def test_python_version_ok_on_a_modern_interpreter(tmp_path, monkeypatch):
-    monkeypatch.setattr(doctor.sys, "version_info", (3, 12, 4, "final", 0))
+    monkeypatch.setattr(doctor, "_python_version_info", lambda: (3, 12, 4, "final", 0))
     repo = _git_repo(tmp_path)
     results = doctor.run_checks(repo, _config_dir(tmp_path))
     result = _result(results, "python version")
@@ -69,9 +69,57 @@ def test_python_version_ok_on_a_modern_interpreter(tmp_path, monkeypatch):
 
 
 def test_python_version_fails_below_3_11(tmp_path, monkeypatch):
-    monkeypatch.setattr(doctor.sys, "version_info", (3, 10, 9, "final", 0))
+    monkeypatch.setattr(doctor, "_python_version_info", lambda: (3, 10, 9, "final", 0))
     repo = _git_repo(tmp_path)
     results = doctor.run_checks(repo, _config_dir(tmp_path))
     result = _result(results, "python version")
     assert result.ok is False
     assert result.fix
+
+
+# --- check 2: venv + required packages + jobspy (WARN) ----------------------
+
+def test_venv_and_required_packages_ok_when_venv_dir_present_and_importable(tmp_path):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "venv + required packages")
+    assert result.ok is True
+
+
+def test_venv_missing_is_a_fail_with_a_create_command(tmp_path):
+    repo = _git_repo(tmp_path)  # no .venv/ created
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "venv + required packages")
+    assert result.ok is False
+    assert ".venv" in result.fix
+
+
+def test_missing_required_package_fails_and_names_it(tmp_path, monkeypatch):
+    (tmp_path / ".venv").mkdir()
+    monkeypatch.setitem(sys.modules, "yaml", None)  # simulate absence
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "venv + required packages")
+    assert result.ok is False
+    assert "yaml" in result.detail
+
+
+def test_jobspy_present_is_ok(tmp_path, monkeypatch):
+    fake_jobspy = type(sys)("jobspy")
+    monkeypatch.setitem(sys.modules, "jobspy", fake_jobspy)  # simulate presence
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "jobspy")
+    assert result.ok is True
+
+
+def test_jobspy_absent_warns_not_fails(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, "jobspy", None)  # simulate absence
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "jobspy")
+    assert result.ok == "warn"
+    assert result.status == "WARN"
