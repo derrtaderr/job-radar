@@ -320,14 +320,17 @@ def test_suppressed_section_names_both_underpowered_contrasts(tmp_path):
     _, report = _report(tmp_path)
     suppressed = _section(report, "## Suppressed proposals")
     assert suppressed.count("\n- ") == 2, suppressed
+    # The bar named is the one the contrast actually had to clear. Citing the
+    # flat 20-point threshold while the Ns demanded 33 understates the bar and
+    # makes a suppression look closer to passing than it was.
     assert (
-        "- remote language in the JD: gap below threshold (5-point gap vs the "
-        "20-point threshold; interviewed N=6, negative-outcome N=7, "
+        "- remote language in the JD: gap below threshold (5-point gap vs a "
+        "33-point bar at these Ns; interviewed N=6, negative-outcome N=7, "
         "floor N=5)." in suppressed)
     assert (
         "- a title-tier hit on the role title: gap below threshold (10-point "
-        "gap vs the 20-point threshold; interviewed N=6, negative-outcome N=7, "
-        "floor N=5)." in suppressed)
+        "gap vs a 33-point bar at these Ns; interviewed N=6, "
+        "negative-outcome N=7, floor N=5)." in suppressed)
 
 
 def test_every_contrast_lands_in_exactly_one_of_the_two_sections(tmp_path):
