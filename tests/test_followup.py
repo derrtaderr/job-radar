@@ -129,3 +129,77 @@ def test_stale_row_is_the_documented_dataclass_shape():
                    days_quiet=30, stage="Screen", next_step="Follow up")
     assert row.company == "X"
     assert row.days_quiet == 30
+
+
+# --- CLI: `stale` subcommand -------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from tools.tracker_cli import main as cli_main  # noqa: E402
+
+EXAMPLE_CONFIG = Path(__file__).parent.parent / "config.example"
+
+
+def _write_tracker(tmp_path, text):
+    path = tmp_path / "tracker.md"
+    path.write_text(text)
+    return path
+
+
+def test_cli_stale_prints_table_and_exits_0(tmp_path, capsys):
+    path = _write_tracker(tmp_path, VALID_TRACKER)
+    rc = cli_main(["stale", str(path), "--days", "10", "--today", "2026-09-20"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cobalt Grid" in out
+    assert "10" in out  # days_quiet shown somewhere
+
+
+def test_cli_stale_no_stale_rows_still_exits_0(tmp_path, capsys):
+    path = _write_tracker(tmp_path, VALID_TRACKER)
+    rc = cli_main(["stale", str(path), "--days", "10", "--today", "2026-09-11"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cobalt Grid" not in out
+
+
+def test_cli_stale_surfaces_unknown_touch(tmp_path, capsys):
+    path = _write_tracker(tmp_path, UNPARSEABLE_LAST_TOUCH)
+    rc = cli_main(["stale", str(path), "--days", "10", "--today", "2026-09-20"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cobalt Grid" in out
+    assert "TBD" in out
+
+
+def test_cli_stale_defaults_to_10_days_without_config_flag(tmp_path, capsys):
+    path = _write_tracker(tmp_path, VALID_TRACKER)
+    # 2026-09-10 -> 2026-09-20 is exactly 10 days: stale under the
+    # no-config, no-explicit-days default of 10.
+    rc = cli_main(["stale", str(path), "--today", "2026-09-20"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cobalt Grid" in out
+
+
+def test_cli_stale_reads_days_from_config(tmp_path, capsys):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    for f in ("queries.yaml", "rules.yaml", "weights.yaml", "exclusions.txt"):
+        (config_dir / f).write_text((EXAMPLE_CONFIG / f).read_text())
+    settings = _settings_without_followup_key((EXAMPLE_CONFIG / "settings.yaml").read_text())
+    settings += "followup_after_days: 5\n"
+    (config_dir / "settings.yaml").write_text(settings)
+
+    path = _write_tracker(tmp_path, VALID_TRACKER)
+    # 2026-09-10 -> 2026-09-16 is 6 days: NOT stale at the CLI's hardcoded
+    # default of 10, but IS stale against the config's followup_after_days: 5.
+    rc = cli_main(["stale", str(path), "--config", str(config_dir), "--today", "2026-09-16"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cobalt Grid" in out
+
+
+def _settings_without_followup_key(base_text: str) -> str:
+    lines = [l for l in base_text.splitlines() if not l.strip().startswith("followup_after_days")]
+    return "\n".join(lines) + "\n"
