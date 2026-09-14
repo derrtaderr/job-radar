@@ -74,20 +74,54 @@ OUTCOME_MAP = (
     ("no response", "no-response"),
     ("silence", "no-response"),
     ("ghost", "no-response"),
+    # "Cold" is the live tracker's own word for a lead that stopped
+    # responding — same fact as "no response"/"ghosted", different author.
+    ("cold", "no-response"),
     ("withdrew", "withdrawn"),
     ("withdrawn", "withdrawn"),
+    # "Lapsed" and the two mismatch forms below are all applicant-side
+    # disqualifications rather than a posting decision: the req didn't
+    # reject the candidate, the candidate's own inaction or fit stopped the
+    # process. That is the same kind of fact as a withdrawal, so they share
+    # its bucket rather than getting a new one.
+    ("lapsed", "withdrawn"),
+    ("location mismatch", "withdrawn"),
+    ("no fit", "withdrawn"),
     ("rejected", "rejected-later"),
     ("rejection", "rejected-later"),
+    ("lost", "rejected-later"),
+    # "Filled" means the req closed with someone else without the
+    # applicant ever being evaluated against a decision — the same class
+    # as losing after being considered, not a new one.
+    ("filled", "rejected-later"),
 )
 
 _CLOSED_SECTION = "closed"
 
 
-def classify_outcome(outcome: str) -> str:
-    """The bucket one Outcome cell belongs to. Case-insensitive substring
-    match against OUTCOME_MAP in order; anything unmatched (including an
-    empty cell) is `other`, never a drop."""
+def _normalize_outcome_cell(outcome: str) -> str:
+    """Lowercase an Outcome cell, strip a leading "closed" prefix (with any
+    separator that follows it), and fold hyphens/underscores to spaces.
+
+    The live tracker writes compound forms like "Closed-timed-out" and
+    "Closed-no-fit (role pivoted)" — a prefix plus a hyphenated tail — while
+    OUTCOME_MAP was built against loose English phrases like "Timed out".
+    Normalizing the tail into that same shape lets one mapping table serve
+    both vocabularies instead of doubling every entry.
+    """
     text = (outcome or "").strip().lower()
+    text = re.sub(r"^closed[-_\s]*", "", text)
+    text = text.replace("-", " ").replace("_", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def classify_outcome(outcome: str) -> str:
+    """The bucket one Outcome cell belongs to. The cell is normalized (see
+    `_normalize_outcome_cell`) and then substring-matched against
+    OUTCOME_MAP in order; anything unmatched — including an empty cell, and
+    a bare "Closed" or "TBD" that normalizes to nothing informative — is
+    `other`, never a drop."""
+    text = _normalize_outcome_cell(outcome)
     if not text:
         return "other"
     for needle, bucket in OUTCOME_MAP:
