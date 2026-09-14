@@ -6,3 +6,9 @@ __pycache__/
 .pytest_cache/
 state.json
 .DS_Store
+
+# Default output tree (settings.yaml `output_dir`) — day folders hold a
+# user's real search record: companies, comp, full JD text. Never
+# committable by accident. If you point `output_dir` outside the repo, that
+# location is your own responsibility to keep private.
+radar-out/
