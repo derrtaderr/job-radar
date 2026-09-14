@@ -25,7 +25,7 @@ Two different people, and the flow forks early between them.
 
 **A stranger evaluating the repo.** Cloned it, has five minutes, wants to see the whole
 system do something real before deciding whether to spend more time on it. Never had a
-real job search in this tool. `tools/demo.py` (Phase 5) exists for exactly this person —
+real job search in this tool. `tools/demo.py` exists for exactly this person —
 see "The demo detour" below.
 
 **The tool's actual user, mid-search.** Has `config/` filled in with their own profile and
@@ -88,8 +88,8 @@ path below is what they'd be signing up for if they kept going with their own se
 `load_config` refuses to guess: `ConfigError` reads exactly `no config at <dir> — copy
 config.example/ to config/ and edit it (see config.example/README.md)`. The doctor's config
 check surfaces the same condition as `FAIL config: no config at <dir> — copy config.example/
-to config/ and edit it`, and every OTHER doctor check that needs a loaded config (profile)
-SKIPs behind it rather than piling a second, confusing error on top of the first. Fix is
+to config/ and edit it`, and every OTHER doctor check that needs a loaded config (profile,
+tracker) SKIPs behind it rather than piling a second, confusing error on top of the first. Fix is
 always `cp -r config.example config`, only when `config/` doesn't already exist — running it
 over a populated `config/` destroys judgment no `git checkout` brings back, which is why the
 doctor never runs this for you.

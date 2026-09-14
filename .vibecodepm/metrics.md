@@ -34,7 +34,7 @@ build whose activation event silently gates on an optional binary is measuring t
 thing. The queue is reachable by every user; the resume/cover letter path is reachable by
 most of them, one `brew install` later.
 
-**Why the offline demo (Phase 5, `tools/demo.py`) does NOT become the activation event.**
+**Why the offline demo (`tools/demo.py`) does NOT become the activation event.**
 The demo produces the same shape of artifact — a queue.md, in fact — but over fictional data
 before the user has written a line of their own judgment. It proves the CODE works, which is
 a different claim from "this user's search is running." Moving activation onto the demo
@@ -52,7 +52,7 @@ where the activation path is broken, and the instrumentation lives in the test s
 
 | What has to be true for activation | What proves it | Where |
 |---|---|---|
-| The doctor genuinely reports clean on a valid config | All nine checks OK, exit 0 | `tests/test_doctor.py::test_cli_prints_one_line_per_check_and_exits_0_when_all_ok` |
+| The doctor genuinely reports clean on a valid config | 8 checks OK + tracker SKIP with config.example (`tracker: null`), exit 0 | `tests/test_doctor.py::test_cli_prints_one_line_per_check_and_exits_0_when_all_ok` |
 | A WARN (missing typst/jobspy) never blocks activation | WARN present, exit code still 0 | `tests/test_doctor.py::test_cli_warn_never_flips_the_exit_code` |
 | `radar.py` genuinely refuses to run on no config, naming the fix | Exit non-zero, output names `config.example` | `tests/test_entrypoint.py::test_entry_point_exits_nonzero_on_a_missing_config` |
 | A real run writes the day folder AND saves state | `radar-out/<date>/queue.md` exists; state.json updated | `tests/test_cli.py::test_run_writes_the_day_folder_and_saves_state` |
