@@ -4,3 +4,4 @@ tracker: null                   # or a path to a markdown tracker (see README)
 tracker_active_sections: [active, drafted but not applied]
 closed_window_days: 90
 followup_after_days: 10        # optional; stale_active flags an Active row this many days quiet or more
+archive_dir: ./archive         # optional, default shown; archived applications hold real personal data — gitignored

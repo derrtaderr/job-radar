@@ -48,6 +48,7 @@ class Config:
     tracker_active_sections: set
     closed_window_days: int
     followup_after_days: int
+    archive_dir: Path
     exclusions: list
 
 
@@ -67,6 +68,20 @@ def _require_int(data: dict, key: str, where: str) -> int:
     value = _require(data, key, where)
     if not isinstance(value, int) or isinstance(value, bool):
         raise ConfigError(f"{key!r} in {where} must be an integer, got {value!r}")
+    return value
+
+
+def _optional_path_str(data: dict, key: str, where: str, default: str) -> str:
+    # Same optional-key shape as `tracker: null` / followup_after_days — the
+    # key may be absent from settings.yaml entirely, in which case `default`
+    # applies. A present value must be a string (a path fragment); PyYAML
+    # would otherwise parse `archive_dir: yes` as a bool same as the int
+    # keys above, which is just as much a typo here as it is for an int.
+    value = data.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ConfigError(f"{key!r} in {where} must be a string, got {value!r}")
     return value
 
 
@@ -199,6 +214,7 @@ def load_config(config_dir: Path) -> Config:
         settings_raw, "tracker_active_sections", "settings.yaml", allow_empty=True))
     closed_window_days = _require_int(settings_raw, "closed_window_days", "settings.yaml")
     followup_after_days = _optional_int(settings_raw, "followup_after_days", "settings.yaml", 10)
+    archive_dir = (base / _optional_path_str(settings_raw, "archive_dir", "settings.yaml", "./archive")).resolve()
 
     # --- exclusions.txt ---
     exclusions = _load_exclusions(config_dir / "exclusions.txt")
@@ -222,5 +238,6 @@ def load_config(config_dir: Path) -> Config:
         tracker_active_sections=tracker_active_sections,
         closed_window_days=closed_window_days,
         followup_after_days=followup_after_days,
+        archive_dir=archive_dir,
         exclusions=exclusions,
     )
