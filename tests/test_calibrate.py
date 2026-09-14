@@ -304,16 +304,16 @@ def test_exactly_two_proposals_clear_the_floor_with_pinned_ns(tmp_path):
     _, report = _report(tmp_path)
     proposals = _section(report, "## Proposals")
     assert proposals.count("\n- ") == 2, proposals
+    # The counts behind each proposal, pinned. The exact sentences are pinned
+    # by the two I3 framing tests below.
     assert (
-        "- `weights.yaml`: consider lowering `unlisted_comp_pts` — "
-        "6 of 7 negative-outcome applications had unlisted comp, "
-        "vs 1 of 6 interviewed (69-point gap vs a 33-point bar at these Ns, "
-        "floor N=5)." in proposals)
+        "consider lowering `unlisted_comp_pts` — 5 of 6 interviewed "
+        "applications had comp listed in the JD, vs 1 of 7 negative-outcome"
+        in proposals)
     assert (
-        "- `rules.yaml`: consider tightening `rules` — "
-        "6 of 6 interviewed applications had no kill-rule language in the JD, "
-        "vs 2 of 7 negative-outcome (71-point gap vs a 33-point bar at these "
-        "Ns, floor N=5)." in proposals)
+        "consider tightening `rules` — 5 of 7 negative-outcome applications "
+        "had kill-rule language in the JD, vs 0 of 6 interviewed" in proposals)
+    assert proposals.count("floor N=5).") == 2
 
 
 def test_suppressed_section_names_both_underpowered_contrasts(tmp_path):
@@ -766,9 +766,18 @@ def test_a_cell_quoted_at_100_percent_carries_its_n(tmp_path):
         "vs 0 of 7 negative-outcome")
 
 
-def test_a_100_percent_cell_on_the_other_side_also_carries_its_n(tmp_path):
+def test_a_100_percent_cell_carries_its_n_from_either_group(tmp_path):
+    # Same rule when the 100% cell belongs to the negative group. It always
+    # arrives as the LEAD cell rather than the trailing one, and that is
+    # structural, not luck: the lead is by definition the higher of the two,
+    # so a trailing cell at 100% would force the lead to 100% too — which
+    # would make that polarity's average 100 and the opposite polarity's 0,
+    # and the opposite would have been framed instead. The trailing branch
+    # keeps the same guard anyway, since a future framing rule could reach it.
     result = _result("remote", 0, 6, 7, 7)
-    assert "7 of 7 negative-outcome (N=7)" in result.evidence()
+    assert result.evidence() == (
+        "7 of 7 negative-outcome applications (N=7) had remote language in "
+        "the JD, vs 0 of 6 interviewed")
 
 
 def test_the_suggestion_direction_reads_straight_from_the_evidence(tmp_path):
