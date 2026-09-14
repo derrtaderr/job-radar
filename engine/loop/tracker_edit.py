@@ -37,7 +37,18 @@ def _normalize_section_key(section: str) -> str:
 
 
 def _escape_cell(value) -> str:
-    return str(value if value is not None else "").replace("|", "\\|")
+    escaped = str(value if value is not None else "").replace("|", "\\|")
+    if escaped.endswith("\\"):
+        # tracker_schema._split_row treats a pipe preceded by "\" as an
+        # escaped literal, not a column boundary. A cell ending in "\" would
+        # write clean but swallow the NEXT cell's boundary pipe on re-parse,
+        # silently merging two cells into one. Refuse rather than write a
+        # row that doesn't round-trip.
+        raise TrackerEditError(
+            f"cell value {value!r} ends with a trailing backslash, which "
+            f"would swallow the next cell's boundary pipe when the row is "
+            f"re-parsed — drop it or add a trailing character")
+    return escaped
 
 
 def _require_section(sections: dict, key: str):
