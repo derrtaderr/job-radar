@@ -21,7 +21,7 @@ whose absence changes what the command DOES, not how it reads:
 - both docs open with the repo-root + `.venv/bin/python` preamble, the same
   as /apply and /add-template — every snippet in them assumes it.
 
-A test that pins prose is a tradeoff: it makes rewording these five
+A test that pins prose is a tradeoff: it makes rewording these seven
 sentences a deliberate two-file edit. That is the point. Everything else in
 both docs is free to change without touching this file.
 """
