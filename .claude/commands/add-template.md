@@ -11,6 +11,9 @@ The stock templates work, but a resume layout is personal. Someone who already h
 resume they like should be able to keep it and still get the drafting, verification, and ATS
 machinery around it.
 
+**Every command in this file runs from the repo root, using `.venv/bin/python`.** Paths are
+repo-relative throughout, and the registry loader resolves `source:` against the repo root.
+
 The rule that shapes this whole command: **a template gets registered only after it has
 compiled in front of you.** A registry entry is a promise that `/apply` can produce a PDF
 from that source. Registering an unverified file breaks the promise at the worst moment —
@@ -98,9 +101,7 @@ template that does not compile means `/apply` fails mid-draft on a document the 
 believed was ready — the failure this command exists to make impossible. There is no flag,
 no override, and no "register it for now."
 
-Worth a glance while the PDF is there: open it and check the page count against the limit
-from Step 1. A template that already runs long before any content is added is a limit the
-drafter can never hit.
+The page count gets checked mechanically in Step 5, once the registry knows the limit.
 
 ## Step 4 — Append the registry entry
 
@@ -121,6 +122,25 @@ edit:
 ```yaml
 default_resume: <name>
 ```
+
+### This edit crosses the tracked/gitignored line — say so out loud
+
+`templates/registry.yaml` is a **tracked** file. `templates/custom/` is **gitignored**. So a
+custom registration is the one place in this repo where a tracked file points at a source
+git will never carry, and the human needs to know that before they commit anything:
+
+- `git status` will show `templates/registry.yaml` as modified. That is expected, not a bug.
+- **Committing an entry whose source lives in `templates/custom/` breaks every fresh clone.**
+  `load_registry` raises `RegistryError` on a source that does not exist, so the next person
+  to clone the repo — or the same person on a second machine — gets a hard failure on every
+  registry load, including `/apply`'s first step.
+- The registry edit is therefore the human's to keep local or to commit knowingly. Keeping
+  it local is the normal choice for a personal template, the same way `config/` stays local.
+  Committing it only makes sense if the source is also tracked — a template with no personal
+  data, living in `templates/` rather than `templates/custom/`.
+
+State which of those two this is when reporting in Step 6. Do not commit the registry edit
+on the human's behalf.
 
 ## Step 5 — Verification compile of the registered entry
 
@@ -143,6 +163,27 @@ print(log)
 "
 ```
 
+Then check the compiled PDF against the page limit the registry now enforces, with the same
+tool `/apply` will use — not by opening it and eyeballing:
+
+```bash
+.venv/bin/python tools/verify_pdf.py /tmp/tmpl-registered.pdf --max-pages <N>
+```
+
+Exit 0 prints `verify_pdf: OK (N pages)`. Read the two possible failures differently:
+
+- **`N pages > max N` is a real finding.** An unfilled template that already exceeds its own
+  limit is a budget the drafter can never hit. Raise the limit or tighten the layout, and
+  re-run.
+- **`text layer nearly empty` here is usually expected, not a failure.** The check fires
+  under 200 extracted characters, and a skeleton template is mostly placeholders — the stock
+  resume compiles to 215 characters unfilled, barely over the line, so a sparser template
+  will trip it for no bad reason. It only matters if the template carries plenty of visible
+  placeholder text and still reports near-empty, which means the text isn't extractable at
+  all (an image-based layout, or a font that doesn't export text). That would make every
+  resume drafted from it unreadable to an ATS, and it needs fixing before the template is
+  used for anything real.
+
 If the template was made a default, confirm that too:
 
 ```bash
@@ -164,7 +205,12 @@ Say what landed:
 
 - The copied source path, and that `templates/custom/` is gitignored and why.
 - The registry line as written.
-- Both compile results — the pre-registration test and the post-registration verification.
+- **The tracked/gitignored call** — that `templates/registry.yaml` now shows as modified in
+  `git status`, and whether this entry should stay local (the normal case for a personal
+  template with a gitignored source) or is safe to commit (only when the source is tracked
+  too). Committing an entry that points into `templates/custom/` breaks every fresh clone.
+- Both compile results — the pre-registration test and the post-registration verification,
+  plus the `verify_pdf` page-count result.
 - Whether the default changed, and for which kind.
 - How to use it: `/apply` takes the defaults automatically; a non-default template is
   selected by name through the registry (`registry.get('<name>')`).
