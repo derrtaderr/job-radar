@@ -11,7 +11,7 @@ import sys
 import pytest
 
 from engine.draft.compile import compile_pdf
-from tools import ats_check
+from tools import ats_check, verify_pdf
 
 pytestmark_no_typst = pytest.mark.skipif(
     shutil.which("typst") is None, reason="typst binary not installed")
@@ -117,6 +117,35 @@ def test_coverage_returns_empty_gaps_when_everything_hits():
 
     assert hits == ["python", "kubernetes"]
     assert gaps == []
+
+
+# ---------------------------------------------------------------------------
+# near-empty threshold — single-sourced from tools.verify_pdf
+# ---------------------------------------------------------------------------
+
+def test_ats_check_has_no_own_near_empty_constant():
+    # ats_check must import verify_pdf's constant rather than duplicate it —
+    # a second NEAR_EMPTY_CHARS defined here would be free to drift from
+    # verify_pdf's over time and reintroduce the two-threshold bug this
+    # fixes. Identity (`is`), not equality, so a redefinition that happens
+    # to match the same int still fails this check.
+    assert ats_check.NEAR_EMPTY_CHARS is verify_pdf.NEAR_EMPTY_CHARS
+    assert ats_check.NEAR_EMPTY_MESSAGE is verify_pdf.NEAR_EMPTY_MESSAGE
+
+
+def test_both_tools_flag_the_same_199_char_input(monkeypatch, tmp_path):
+    near_empty_text = "x" * 199
+    assert len(near_empty_text) < verify_pdf.NEAR_EMPTY_CHARS
+
+    ats_violation = ats_check.garbled(near_empty_text)
+    assert ats_violation == verify_pdf.NEAR_EMPTY_MESSAGE
+
+    monkeypatch.setattr(verify_pdf, "pdf_text", lambda path: near_empty_text)
+    monkeypatch.setattr(verify_pdf, "pdf_pages", lambda path: 1)
+    verify_violations = verify_pdf.verify(tmp_path / "resume.pdf", 2, [])
+
+    assert verify_pdf.NEAR_EMPTY_MESSAGE in verify_violations
+    assert ats_violation in verify_violations
 
 
 # ---------------------------------------------------------------------------
