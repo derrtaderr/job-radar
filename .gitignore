@@ -19,3 +19,8 @@ apply-out/
 
 # Custom templates registered via /add-template may embed personal header data.
 templates/custom/
+
+# Archived applications (settings.yaml `archive_dir`) hold real personal
+# data — resumes, cover letters, JD text, outcome logs. Never committable
+# by accident, same rule as apply-out/ above.
+archive/
