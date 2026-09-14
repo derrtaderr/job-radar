@@ -49,6 +49,26 @@ MULTIPLE_DATES_IN_CELL = """\
 | Cobalt Grid | Data Platform Engineer | HM round | 2026-09-01 spoke, 2026-09-05 followed up | Send follow-up |
 """
 
+# A typo'd year (2027 instead of 2026) puts Last touch AFTER today — this
+# must never compute a negative days_quiet and vanish from both buckets. It
+# goes to unknown_touch with a reason that names the problem as a probable
+# typo, not a silent stale-of-negative-N.
+FUTURE_LAST_TOUCH = """\
+## Active
+
+| Company | Role | Stage | Last touch | Next step |
+|---|---|---|---|---|
+| Cobalt Grid | Data Platform Engineer | HM round | 2027-01-15 | Send follow-up |
+"""
+
+TODAY_LAST_TOUCH = """\
+## Active
+
+| Company | Role | Stage | Last touch | Next step |
+|---|---|---|---|---|
+| Cobalt Grid | Data Platform Engineer | HM round | 2026-09-20 | Send follow-up |
+"""
+
 
 def test_row_exactly_n_days_quiet_is_stale():
     # 2026-09-10 -> today 2026-09-20 is exactly 10 days quiet.
@@ -110,6 +130,26 @@ def test_unparseable_last_touch_is_unknown_not_dropped():
     row, reason = unknown[0]
     assert row["Company"] == "Cobalt Grid"
     assert "TBD" in reason
+
+
+def test_future_last_touch_is_unknown_not_dropped():
+    # today=2026-09-20, Last touch=2027-01-15 -> negative days_quiet.
+    # Must land in unknown_touch, never in stale, never vanish from both.
+    stale, unknown = stale_active(FUTURE_LAST_TOUCH, date(2026, 9, 20), 10)
+    assert stale == []
+    assert len(unknown) == 1
+    row, reason = unknown[0]
+    assert row["Company"] == "Cobalt Grid"
+    assert "2027-01-15" in reason
+    assert "future" in reason.lower()
+    assert "typo" in reason.lower()
+
+
+def test_today_dated_last_touch_is_neither_stale_nor_unknown():
+    # days_quiet == 0 exactly: correctly current, not a future-date typo.
+    stale, unknown = stale_active(TODAY_LAST_TOUCH, date(2026, 9, 20), 10)
+    assert stale == []
+    assert unknown == []
 
 
 def test_no_active_section_returns_empty_both():
