@@ -47,6 +47,7 @@ class Config:
     tracker_path: "Optional[Path]"
     tracker_active_sections: set
     closed_window_days: int
+    followup_after_days: int
     exclusions: list
 
 
@@ -64,6 +65,21 @@ def _require_int(data: dict, key: str, where: str) -> int:
     # number" instinct too but violates the int contract just as quietly.
     # Both must be rejected explicitly, not just "isn't missing."
     value = _require(data, key, where)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ConfigError(f"{key!r} in {where} must be an integer, got {value!r}")
+    return value
+
+
+def _optional_int(data: dict, key: str, where: str, default: int) -> int:
+    # Same optional-key shape as `tracker: null` — the key may be absent
+    # from settings.yaml entirely, in which case `default` applies. When
+    # present it's held to the same int-not-bool guard as comp_floor and
+    # weights.yaml `points` (PyYAML parses `yes`/`no` as bool, and bool is
+    # an int subclass, so `followup_after_days: yes` would otherwise become
+    # a silent 1; a float slips the same "it's a number" instinct).
+    value = data.get(key)
+    if value is None:
+        return default
     if not isinstance(value, int) or isinstance(value, bool):
         raise ConfigError(f"{key!r} in {where} must be an integer, got {value!r}")
     return value
@@ -182,6 +198,7 @@ def load_config(config_dir: Path) -> Config:
     tracker_active_sections = set(_require_list(
         settings_raw, "tracker_active_sections", "settings.yaml", allow_empty=True))
     closed_window_days = _require_int(settings_raw, "closed_window_days", "settings.yaml")
+    followup_after_days = _optional_int(settings_raw, "followup_after_days", "settings.yaml", 10)
 
     # --- exclusions.txt ---
     exclusions = _load_exclusions(config_dir / "exclusions.txt")
@@ -204,5 +221,6 @@ def load_config(config_dir: Path) -> Config:
         tracker_path=tracker_path,
         tracker_active_sections=tracker_active_sections,
         closed_window_days=closed_window_days,
+        followup_after_days=followup_after_days,
         exclusions=exclusions,
     )
