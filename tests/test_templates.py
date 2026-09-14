@@ -66,3 +66,40 @@ def test_filled_example_contains_persona_email_and_headings(tmp_path):
     assert "SUMMARY" in text
     assert "EXPERIENCE" in text
     assert "SKILLS" in text
+
+
+def test_stock_cover_template_compiles_as_is(tmp_path):
+    out = tmp_path / "cover.pdf"
+
+    ok, log = compile_pdf(TEMPLATES_DIR / "cover.typ", out=out)
+
+    assert ok is True, log
+    assert out.exists()
+
+
+def test_filled_cover_example_compiles(tmp_path):
+    out = tmp_path / "cover_example.pdf"
+
+    ok, log = compile_pdf(FIXTURES_DIR / "cover_example.typ", out=out)
+
+    assert ok is True, log
+    assert out.exists()
+
+
+def test_filled_cover_example_is_exactly_one_page(tmp_path):
+    out = tmp_path / "cover_example.pdf"
+    compile_pdf(FIXTURES_DIR / "cover_example.typ", out=out)
+
+    reader = PdfReader(out)
+
+    assert len(reader.pages) == 1
+
+
+def test_filled_cover_example_contains_signature_and_persona_name(tmp_path):
+    out = tmp_path / "cover_example.pdf"
+    compile_pdf(FIXTURES_DIR / "cover_example.typ", out=out)
+
+    text = "".join(page.extract_text() for page in PdfReader(out).pages)
+
+    assert "Sincerely" in text
+    assert "Alex Rivera" in text
