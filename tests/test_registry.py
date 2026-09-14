@@ -27,10 +27,21 @@ def test_stock_registry_loads():
 
 
 def test_default_resolves_by_kind():
+    # Deliberately does NOT pin the literal stock names. /add-template lets a
+    # user point default_resume at their own template, whose source lives in
+    # gitignored templates/custom/ — a legitimate local state that must not
+    # fail the suite. What the default contract actually promises is that each
+    # kind resolves to a registered template OF THAT KIND with a usable page
+    # budget, and that is what this asserts. test_stock_registry_loads still
+    # pins the stock entries themselves by name.
     registry = load_registry(REPO_ROOT)
 
-    assert registry.default("resume").name == "stock-resume"
-    assert registry.default("cover").name == "stock-cover"
+    for kind in ("resume", "cover"):
+        default = registry.default(kind)
+        assert default.name in registry.templates
+        assert registry.get(default.name) is default
+        assert default.kind == kind
+        assert default.page_limit >= 1
 
 
 def test_unknown_default_kind_names_known_kinds():
