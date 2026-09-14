@@ -161,13 +161,15 @@ def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
     state = load_state(cfg.state_file)
     try:
         raw_rows = scrape_fn(cfg)
-    except ImportError:
+    except ImportError as e:
         # engine/radar/scrape.py imports cleanly without jobspy on the path —
         # the import is lazy, inside scrape() — so _scrape_module() above
         # never catches a missing jobspy. It only surfaces here, once the
         # scrape actually runs, and a stranger on system python deserves the
-        # same friendly message as a missing scrape module, not a traceback.
-        print(_NO_SCRAPE)
+        # same friendly message as a missing scrape module, not a traceback —
+        # but the friendly message ALONE is misleading if the real cause is
+        # some other missing dependency, so the underlying text rides along.
+        print(f"{_NO_SCRAPE}\n  underlying import error: {e}")
         return 2
     if not raw_rows:
         # Zero rows is a broken scrape, not a quiet day. Say so loudly and leave
