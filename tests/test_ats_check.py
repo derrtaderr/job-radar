@@ -20,9 +20,10 @@ RESUME_FIXTURE = "tests/fixtures/resume_example.typ"
 
 SYNTHETIC_JD = """
 We are looking for a Senior Backend Engineer with strong Python experience.
-You will work with our team to build scalable services in Python.
-Experience with Kubernetes is a plus. The role requires strong communication
-skills and the ability to mentor other engineers.
+You will work with our team to build scalable Python and Kubernetes services.
+Deep Kubernetes knowledge is required for daily deployments and operations.
+Terraform experience is a plus but not required. The role requires strong
+communication skills and the ability to mentor other engineers.
 """
 
 
@@ -47,7 +48,7 @@ def test_jd_keywords_drops_a_stopword_even_at_high_frequency():
 def test_jd_keywords_drops_a_term_seen_only_once():
     keywords = ats_check.jd_keywords(SYNTHETIC_JD)
 
-    assert "kubernetes" not in keywords
+    assert "terraform" not in keywords
 
 
 def test_jd_keywords_orders_by_frequency_descending():
