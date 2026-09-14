@@ -223,11 +223,20 @@ def join_archives(closed_rows, archive_dir) -> tuple:
     scored against the wrong postings. There is no symptom.
 
     So the order is: normalized exact equality on company AND role, checked
-    against every unclaimed archive, wins outright. Only when nothing matches
-    exactly does substring run, and only when it finds EXACTLY ONE candidate
-    is that candidate used. Two or more is an ambiguity, and a guess there is
-    precisely the bug above, so the row joins nothing and says which archives
-    it could not choose between.
+    against every unclaimed archive, wins outright, and substring runs only
+    when nothing matched exactly. Then ONE rule governs both branches —
+    exactly one candidate joins; two or more is an ambiguity, and the row
+    joins nothing and says which archives it could not choose between.
+
+    That rule covers the exact branch too, which is easy to miss. Two
+    archives exactly equal to one row (a reapplication archived twice under
+    `...-a` and `...-b`) carry nothing that says which of them this row's
+    outcome belongs to. Taking the first in slug order there is the same
+    coin-flip as the substring bug above, just better dressed, and it fails
+    the same way: silently. The consequence is deliberate — a genuine
+    reapplication archived twice reports two ambiguities rather than pairing
+    rows off against archives by slug order, because company and role alone
+    genuinely cannot make that pairing.
 
     Company alone is never enough: one employer posting two roles is two
     applications. Each archive is consumed at most once, so a legitimate
@@ -249,14 +258,17 @@ def join_archives(closed_rows, archive_dir) -> tuple:
         exact = [c for c in available
                  if _normalize_tracker_cell(company) == _normalize_tracker_cell(c[2])
                  and _normalize_tracker_cell(role) == _normalize_tracker_cell(c[3])]
-        if exact:
-            # More than one exact match means genuine duplicate archives for
-            # the same company and role; taking the first in slug order is
-            # deterministic, and the next identical row takes the next one.
-            candidates = exact[:1]
-        else:
-            candidates = [c for c in available
-                          if _soft_match(company, c[2]) and _soft_match(role, c[3])]
+        # Exact matches, when there are any, are the whole candidate set —
+        # substring never gets to add to them. But an exact match is not a
+        # licence to pick: two archives exactly equal to one row (a
+        # reapplication archived twice) carry no information saying which of
+        # them this row's outcome belongs to, so slug order would be the same
+        # coin-flip the soft branch was fixed for, just better dressed. One
+        # rule covers both branches below: exactly one candidate joins,
+        # anything else is an ambiguity.
+        candidates = exact or [
+            c for c in available
+            if _soft_match(company, c[2]) and _soft_match(role, c[3])]
 
         if len(candidates) == 1:
             idx, slug_dir, arch_company, arch_role = candidates[0]
