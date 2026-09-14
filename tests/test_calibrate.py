@@ -950,3 +950,85 @@ def test_one_exact_archive_still_joins_when_others_merely_soft_match(tmp_path):
 
     assert len(joined) == 1 and unjoined == [] and ambiguous == []
     assert joined[0].archive.name == "widget-co-data-engineer"
+
+
+# --- BLOCKER: exact must beat substring ACROSS rows, not just within one ----
+
+def test_an_earlier_soft_match_cannot_steal_a_later_rows_exact_archive(tmp_path):
+    # The reviewer's probe. Exact-beats-substring held only inside one row's
+    # candidate scan; rows then consumed archives in tracker order, so the
+    # "Analytics Data Engineer" row (never archived) soft-matched and claimed
+    # the archive that belongs EXACTLY to the "Data Engineer" row below it.
+    # The Offer row came back unjoined and the No-response row was scored
+    # against a JD that was never its own — symptomless, again.
+    from engine.loop.calibrate import closed_rows
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer",
+             jd="Base salary range is $165,000 to $195,000 per year.\n")
+    tracker = _closed(
+        "Widget Co | Analytics Data Engineer | 2026-05-01 | No response | n/a | n/a",
+        "Widget Co | Data Engineer | 2026-05-02 | Offer | n/a | n/a")
+
+    joined, unjoined, ambiguous = join_archives(
+        closed_rows(tracker), tmp_path / "archive")
+
+    assert len(joined) == 1 and ambiguous == []
+    assert joined[0].row.get("Outcome") == "Offer"
+    assert joined[0].archive.name == "widget-co-data-engineer"
+    assert [r.get("Role") for r in unjoined] == ["Analytics Data Engineer"]
+
+
+def test_exact_wins_across_rows_regardless_of_tracker_position(tmp_path):
+    # Same shape with the rows the other way round: the exact row is FIRST.
+    # Both orders must land the archive on the exact match, or the fix is
+    # just the old bug with a different lucky ordering.
+    from engine.loop.calibrate import closed_rows
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    tracker = _closed(
+        "Widget Co | Data Engineer | 2026-05-01 | Offer | n/a | n/a",
+        "Widget Co | Analytics Data Engineer | 2026-05-02 | No response | n/a | n/a")
+
+    joined, unjoined, ambiguous = join_archives(
+        closed_rows(tracker), tmp_path / "archive")
+
+    assert len(joined) == 1 and ambiguous == []
+    assert joined[0].row.get("Outcome") == "Offer"
+    assert [r.get("Role") for r in unjoined] == ["Analytics Data Engineer"]
+
+
+def test_a_soft_match_still_joins_what_no_row_claims_exactly(tmp_path):
+    # The second pass still earns its keep: once every exact claim is settled,
+    # a leftover archive goes to the row that only soft-matches it.
+    from engine.loop.calibrate import closed_rows
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    _archive(tmp_path, "harborlight-senior-data-engineer",
+             "Harborlight", "Senior Data Engineer")
+    tracker = _closed(
+        "Harborlight Data | Senior Data Engineering | 2026-05-01 | Offer | n/a | n/a",
+        "Widget Co | Data Engineer | 2026-05-02 | No response | n/a | n/a")
+
+    joined, unjoined, ambiguous = join_archives(
+        closed_rows(tracker), tmp_path / "archive")
+
+    assert len(joined) == 2 and unjoined == [] and ambiguous == []
+    by_outcome = {j.row.get("Outcome"): j.archive.name for j in joined}
+    assert by_outcome == {
+        "Offer": "harborlight-senior-data-engineer",
+        "No response": "widget-co-data-engineer",
+    }
+
+
+def test_results_stay_in_tracker_order_across_both_passes(tmp_path):
+    # A row resolved in pass 2 must not be reported after every pass-1 row.
+    # The lists the report counts off are read by humans in file order.
+    from engine.loop.calibrate import closed_rows
+    _archive(tmp_path, "harborlight-senior-data-engineer",
+             "Harborlight", "Senior Data Engineer")
+    _archive(tmp_path, "widget-co-data-engineer", "Widget Co", "Data Engineer")
+    tracker = _closed(
+        "Harborlight Data | Senior Data Engineering | 2026-05-01 | Offer | n/a | n/a",
+        "Widget Co | Data Engineer | 2026-05-02 | Offer | n/a | n/a")
+
+    joined, _unjoined, _amb = join_archives(
+        closed_rows(tracker), tmp_path / "archive")
+
+    assert [j.row.get("Company") for j in joined] == ["Harborlight Data", "Widget Co"]
