@@ -16,7 +16,10 @@ Every company, role, and JD in these fixtures is fictional.
 NOTE: `engine.loop.calibrate` and `tools.calibrate` share a basename. Imports
 in this file stay fully qualified for that reason (house precedent: compile.py).
 """
-from engine.loop.calibrate import OUTCOME_BUCKETS, outcome_classes
+from pathlib import Path
+
+from engine.loop.archive import archive_application
+from engine.loop.calibrate import OUTCOME_BUCKETS, join_archives, outcome_classes
 
 
 def _closed(*rows: str) -> str:
@@ -125,3 +128,103 @@ def test_a_tracker_with_no_closed_section_yields_empty_buckets():
     classes = outcome_classes(text)
     assert list(classes) == list(OUTCOME_BUCKETS)
     assert sum(len(rows) for rows in classes.values()) == 0
+
+
+# --- join_archives: both sides returned, and the misses are countable -------
+
+def _archive(tmp_path: Path, slug: str, company: str, role: str,
+             jd: str = "# JD\n") -> Path:
+    """One archived application built through the real archive_application,
+    not by hand — the join has to work against what that function actually
+    writes, not against a shape this test invented."""
+    apply_dir = tmp_path / "apply-out" / slug
+    apply_dir.mkdir(parents=True)
+    (apply_dir / "jd.md").write_text(jd)
+    return archive_application(
+        apply_dir, tmp_path / "archive",
+        {"company": company, "role": role, "applied": "2026-07-01"})
+
+
+def test_join_matches_on_outcome_frontmatter_company_and_role(tmp_path):
+    _archive(tmp_path, "cobalt-grid-data-engineer", "Cobalt Grid", "Data Engineer")
+    rows = outcome_classes(_one("Offer"))["offer"]
+
+    joined, unjoined = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1
+    assert unjoined == []
+    assert joined[0].row is rows[0]
+    assert joined[0].archive.name == "cobalt-grid-data-engineer"
+
+
+def test_unjoined_rows_come_back_rather_than_being_dropped(tmp_path):
+    # The whole reason both lists are returned: a Closed row with no archive
+    # behind it is a data-quality finding, not something to quietly skip.
+    (tmp_path / "archive").mkdir()
+    rows = outcome_classes(_one("Offer"))["offer"]
+
+    joined, unjoined = join_archives(rows, tmp_path / "archive")
+
+    assert joined == []
+    assert [r.get("Company") for r in unjoined] == ["Cobalt Grid"]
+
+
+def test_join_survives_a_tracker_cell_annotation(tmp_path):
+    # Tracker cells carry notes a slug never will. _normalize_tracker_cell
+    # is imported from the radar rather than reimplemented here.
+    _archive(tmp_path, "harborlight-senior-data-engineer",
+             "Harborlight", "Senior Data Engineer")
+    rows = outcome_classes(_closed(
+        "Harborlight (via referral) | Senior Data Engineer | "
+        "2026-08-20 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and unjoined == []
+
+
+def test_a_company_match_alone_is_not_a_join(tmp_path):
+    # Same employer, different role, is a different application. Matching on
+    # company alone would attribute one posting's JD to another's outcome.
+    _archive(tmp_path, "cobalt-grid-analytics-engineer",
+             "Cobalt Grid", "Analytics Engineer")
+    rows = outcome_classes(_closed(
+        "Cobalt Grid | Platform Reliability Engineer | "
+        "2026-08-20 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined = join_archives(rows, tmp_path / "archive")
+
+    assert joined == [] and len(unjoined) == 1
+
+
+def test_each_archive_is_consumed_once(tmp_path):
+    # A repeat application to the same company and role is legitimate in the
+    # Closed section (tracker_schema allows it by design). Two rows must not
+    # both claim the one archive, or every feature it carries gets
+    # double-counted in the contrasts.
+    _archive(tmp_path, "tessellate-data-engineer", "Tessellate", "Data Engineer")
+    rows = outcome_classes(_closed(
+        "Tessellate | Data Engineer | 2026-04-02 | Offer | n/a | n/a",
+        "Tessellate | Data Engineer | 2026-08-20 | Offer | n/a | n/a"))["offer"]
+
+    joined, unjoined = join_archives(rows, tmp_path / "archive")
+
+    assert len(joined) == 1 and len(unjoined) == 1
+
+
+def test_a_missing_archive_dir_is_all_unjoined_not_a_crash(tmp_path):
+    rows = outcome_classes(_one("Offer"))["offer"]
+    joined, unjoined = join_archives(rows, tmp_path / "no-such-archive")
+    assert joined == [] and len(unjoined) == 1
+
+
+def test_join_is_deterministic_across_archive_listing_order(tmp_path):
+    for slug, company in (("zenith-data-engineer", "Zenith Works"),
+                          ("acorn-data-engineer", "Acorn Metrics")):
+        _archive(tmp_path, slug, company, "Data Engineer")
+    rows = outcome_classes(_closed(
+        "Acorn Metrics | Data Engineer | 2026-08-20 | Offer | n/a | n/a"))["offer"]
+
+    first = join_archives(rows, tmp_path / "archive")[0][0].archive.name
+    second = join_archives(rows, tmp_path / "archive")[0][0].archive.name
+    assert first == second == "acorn-data-engineer"
