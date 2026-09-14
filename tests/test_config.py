@@ -79,6 +79,59 @@ def test_tier_points_float_rejected(tmp_path):
         load_config(tmp_path)
 
 
+def test_scalar_searches_rejected(tmp_path):
+    # A typo'd `searches: Data Engineer` loads as a plain str, and scrape()
+    # would silently run one query per character instead of one per title.
+    broken_queries = (EXAMPLE / "queries.yaml").read_text().replace(
+        'searches:\n  - "Data Engineer"\n  - "Analytics Engineer"\n  - "Data Platform Engineer"',
+        "searches: Data Engineer",
+    )
+    (tmp_path / "queries.yaml").write_text(broken_queries)
+    for f in ("rules", "weights", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="searches"):
+        load_config(tmp_path)
+
+
+def test_scalar_sites_rejected(tmp_path):
+    broken_queries = (EXAMPLE / "queries.yaml").read_text().replace(
+        "sites: [linkedin]", "sites: linkedin"
+    )
+    (tmp_path / "queries.yaml").write_text(broken_queries)
+    for f in ("rules", "weights", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="sites"):
+        load_config(tmp_path)
+
+
+def test_empty_searches_rejected(tmp_path):
+    broken_queries = (EXAMPLE / "queries.yaml").read_text().replace(
+        'searches:\n  - "Data Engineer"\n  - "Analytics Engineer"\n  - "Data Platform Engineer"',
+        "searches: []",
+    )
+    (tmp_path / "queries.yaml").write_text(broken_queries)
+    for f in ("rules", "weights", "settings"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="searches"):
+        load_config(tmp_path)
+
+
+def test_scalar_tracker_active_sections_rejected(tmp_path):
+    broken_settings = (EXAMPLE / "settings.yaml").read_text().replace(
+        "tracker_active_sections: [active, drafted but not applied]",
+        "tracker_active_sections: active",
+    )
+    (tmp_path / "settings.yaml").write_text(broken_settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="tracker_active_sections"):
+        load_config(tmp_path)
+
+
 def test_comp_floor_bool_rejected(tmp_path):
     # Same silent-misbehavior class as the tier `points` bug, extended to
     # comp_floor since it's compared numerically downstream the same way.
