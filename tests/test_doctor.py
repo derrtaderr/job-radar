@@ -170,3 +170,42 @@ def test_config_surfaces_configerror_message_verbatim(tmp_path):
     result = _result(results, "config")
     assert result.ok is False
     assert "bad yaml in settings.yaml" in result.detail
+
+
+# --- check 5: profile.md schema (reuses engine.profile_schema) --------------
+
+def test_profile_ok_when_config_example_copied_verbatim(tmp_path):
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "profile")
+    assert result.ok is True
+
+
+def test_profile_skips_when_config_does_not_load_at_all(tmp_path):
+    repo = _git_repo(tmp_path)
+    missing_dir = tmp_path / "config"  # never created — check 4 FAILs
+    results = doctor.run_checks(repo, missing_dir)
+    result = _result(results, "profile")
+    assert result.ok == "skip"
+    assert result.status == "SKIP"
+
+
+def test_profile_fails_when_missing_even_though_config_loads(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "profile.md").unlink()  # profile.md isn't in load_config's
+    # REQUIRED_FILES, so config still loads fine with it gone
+    results = doctor.run_checks(repo, cfg_dir)
+    assert _result(results, "config").ok is True
+    result = _result(results, "profile")
+    assert result.ok is False
+
+
+def test_profile_fails_and_names_violations_when_malformed(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "profile.md").write_text("---\nname: Alex\n---\nno sections here")
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "profile")
+    assert result.ok is False
+    assert "missing keys" in result.detail
