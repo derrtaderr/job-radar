@@ -212,3 +212,23 @@ MORE_CELLS_THAN_HEADERS = """\
 |---|---|---|---|
 | Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
 """
+
+# A row short one cell shifts every later column left by one position — the
+# shape of a real malformed row found on a live tracker (5 cells vs 6
+# headers). Once the cell count is wrong, column identity can't be trusted,
+# so the shifted "Date closed" position landing on prose with no ISO date
+# must NOT also fire — one real bug, one violation, not two symptoms of the
+# same row.
+CELL_COUNT_MISMATCH_SUPPRESSES_DOWNSTREAM_CHECKS = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | 2026-09-10 |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Tempo Corp | GTM Engineer | Outbound app, resurrected later, screen cancelled |
+"""

@@ -8,6 +8,7 @@ from tests.fixtures_tracker import (
     BAD_ISO_DATE_ACTIVE,
     BAD_ISO_DATE_CLOSED,
     CELL_COUNT_MISMATCH,
+    CELL_COUNT_MISMATCH_SUPPRESSES_DOWNSTREAM_CHECKS,
     DUPLICATE_COMPANY_ROLE,
     DUPLICATE_IN_CLOSED_ALLOWED,
     DUPLICATE_IN_DRAFTED_STILL_FLAGGED,
@@ -251,3 +252,16 @@ def test_more_cells_than_headers_drops_overflow_and_flags_line():
 
     violations = tracker_check(MORE_CELLS_THAN_HEADERS)
     assert any("line 5" in v and "4 cells" in v and "3" in v for v in violations)
+
+
+# --- a cell-count mismatch suppresses downstream column checks on that row ---
+# Column identity is unreliable once the count is wrong (found on a real
+# malformed row on a live tracker) — one real bug should report as ONE
+# violation, not a cell-count mismatch plus a spurious ISO-date violation on
+# a column that shifted left.
+
+def test_cell_count_mismatch_does_not_also_fire_iso_date_check():
+    violations = tracker_check(CELL_COUNT_MISMATCH_SUPPRESSES_DOWNSTREAM_CHECKS)
+    closed_violations = [v for v in violations if "Closed section" in v]
+    assert len(closed_violations) == 1
+    assert "cells" in closed_violations[0]
