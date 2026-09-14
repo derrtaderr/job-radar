@@ -39,7 +39,9 @@ _DATE_COLUMNS = {"last touch", "date closed"}
 # by design — a company can reapply for the same role months apart (a real
 # tracker shows this for Crux, EZO.io, and Tempo, all closed-then-reactivated
 # or reapplied), so flagging a repeat there is a false positive, not a data
-# bug. Orchestrator ruling, 2026-09-13.
+# bug. Orchestrator ruling, 2026-09-13. Same set tracker_edit gates row
+# findability on (tracker_edit._IDENTITY_GATED_SECTIONS) — keep the two in
+# sync.
 _DUPLICATE_GATED_SECTIONS = {"active", "drafted but not applied"}
 
 
