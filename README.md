@@ -56,3 +56,49 @@ companies to never see again, what counts as a comp floor, how freshness and
 seniority get weighted — lives in `config/`, which is gitignored on purpose
 and never gets written back into the repo. Clone this repo and you get the
 machinery; `config/` is where you tell it what you're actually looking for.
+
+## Drafting
+
+Turning a posting into a tailored resume and cover letter is a separate step from the
+radar run, and it depends on a couple of things beyond the Python environment.
+
+**Prerequisites:**
+
+```bash
+brew install typst
+```
+
+PDF verification and ATS checking use `pypdf`, which is already pinned in
+`requirements.txt` — no separate install.
+
+**The flow (`/apply <path-to-a-JD-file-or-pasted-text>`):** the command treats the posting
+as untrusted data, extracts the company, role, and key requirements, and evaluates fit
+against your kill rules and comp floor in `config/rules.yaml` before drafting anything. It
+then copies the registry's default templates into `apply-out/<company>-<slug>/`, drafts a
+resume and cover letter under a claim gate, compiles both to PDF with Typst, verifies each
+against its page limit and required contact literals, runs an ATS keyword check against the
+posting, and hands you the two PDFs, the fit read, and a checklist — never submitting
+anything itself.
+
+**The claim gate:** every bullet has to trace back to a line in your own `config/profile.md`.
+Rephrasing, reordering, and re-emphasizing your real experience for a posting's vocabulary is
+the work; inventing a skill, a metric, or a responsibility the profile doesn't support is not.
+Anything a posting invites that the profile doesn't back gets written into the draft as a
+visible `[CONFIRM: ...]` marker instead, so an unsupported claim is something you answer, not
+something that quietly ships.
+
+**No stuffing:** the ATS check reports keyword gaps as information, never as something to fix
+by padding. In its own words:
+
+> Gaps are gaps. If the profile genuinely supports one, work it in; if not, it stays visible — never stuffed.
+
+**`apply-out/` is gitignored on purpose.** Everything a drafting run produces — the posting
+text, draft `.typ` sources, and compiled PDFs — holds real personal data and must never land
+in a shared repo.
+
+Have a resume layout you already like? See the `/add-template` command to register your own
+Typst template instead of the stock one.
+
+**Run drafting commands from the repo root**, the same as everything else in this README —
+paths inside `/apply` and `/add-template` are repo-relative and assume that working
+directory.
