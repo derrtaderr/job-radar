@@ -398,7 +398,7 @@ def test_cli_runs_meaningfully_with_no_config_dir_at_all(tmp_path, capsys):
     out = capsys.readouterr().out
     assert exit_code == 1  # check 5 FAILs
     assert "cp -r config.example config" in out
-    assert "SKIP" in out  # checks 5 and 8
+    assert "SKIP" in out  # checks 6 (profile) and 9 (tracker)
     # every other check still ran and printed
     for name in ("python version", "venv + required packages", "jobspy",
                  "typst", "privacy hook", "gitignore integrity"):

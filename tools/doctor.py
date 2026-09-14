@@ -144,9 +144,10 @@ _CONFIG_FIX = "cp -r config.example config"
 
 def _load_config_or_none(config_dir: Path):
     """Try load_config once and hand back (config, error) — error is the
-    ConfigError's message string (never None-and-config-both-set). Checks 5
-    and 8 depend on a loaded Config, so they share this instead of each
-    calling load_config a second time and risking two different verdicts."""
+    ConfigError's message string (never None-and-config-both-set). Checks 6
+    (profile) and 9 (tracker) depend on a loaded Config, so they share this
+    instead of each calling load_config a second time and risking two
+    different verdicts."""
     try:
         return load_config(config_dir), None
     except ConfigError as exc:
@@ -255,8 +256,8 @@ def _check_tracker(config, config_error: "str | None") -> CheckResult:
 def run_checks(repo_root, config_dir) -> list:
     """Run all nine checks and return their CheckResults, in order. Every
     check runs independently — one failing never skips or hides another,
-    except checks 5 and 8, which SKIP (not FAIL) when there's no loadable
-    Config to check yet."""
+    except checks 6 (profile) and 9 (tracker), which SKIP (not FAIL) when
+    there's no loadable Config to check yet."""
     repo_root = Path(repo_root)
     config_dir = Path(config_dir)
     config, config_error = _load_config_or_none(config_dir)

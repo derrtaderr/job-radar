@@ -26,7 +26,7 @@ What this file pins, and why each one is load-bearing:
   doctor uses, never by a copy of the expectations.
 - **the claim-ledger line, verbatim.** `engine/profile_schema.py` requires that
   exact sentence in `profile.md`; a doc that paraphrases it hands the user a
-  profile that fails doctor check 5.
+  profile that fails doctor check 6 (profile).
 - **the claim-ledger comment goes BELOW the frontmatter.** Above it, the file
   no longer opens with `---`, `split_frontmatter` raises, and the profile check
   fails with a message about a fence that says nothing about the comment that
