@@ -31,3 +31,17 @@ actual preferences.
   application stops being tracked.
 - `exclusions.txt` — companies never to surface again, one per line, case-insensitive
   substring match.
+- `profile.md` — your career facts, and the one file the drafting side reads.
+
+## profile.md is the claim ledger
+
+`profile.md` is different in kind from the other files here. The rest tell the engine what
+to look for; this one tells `/apply` what you are allowed to say about yourself. It holds
+your contact frontmatter, a summary, every role with its factual bullets, skills,
+education, and an evidence-notes section carrying the context behind each number. The
+drafter may only write a resume or cover-letter claim that traces back to a line in it.
+Anything a posting invites that your ledger doesn't support comes back as
+`[CONFIRM: <claim>]` for you to answer, rather than getting quietly written into a PDF
+with your name on it. So fill it in generously and truthfully — longer than any single
+resume needs, since tailoring works by selecting from a deep ledger, not by embellishing a
+thin one. Like everything in `config/`, it never leaves your machine.
