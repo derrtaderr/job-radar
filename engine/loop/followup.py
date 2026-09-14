@@ -10,7 +10,12 @@ uses elsewhere: the latest ISO-date match (YYYY-MM-DD) wins.
 A row whose Last-touch cell is empty, or non-empty but carries no
 parseable ISO date at all, is never silently dropped — it can't be judged
 stale or fresh, so it goes into a second bucket (`unknown_touch`) the
-caller is expected to surface, not swallow.
+caller is expected to surface, not swallow. The same holds for a Last-touch
+date that falls AFTER today (a typo'd year is the realistic cause,
+e.g. 2027 instead of 2026): that produces a negative days_quiet, which is
+exactly as unjudgeable as no date at all, so it also routes to
+unknown_touch rather than silently failing the `>= days` test and
+vanishing from both buckets.
 """
 from __future__ import annotations
 
@@ -50,8 +55,10 @@ def stale_active(text: str, today: date, days: int):
         date is `days` or more days before `today`, in the row's original
         tracker order.
       - unknown_touch: list[(Row, reason)] for every Active row whose
-        Last-touch cell is empty or has no parseable ISO date. `reason` is
-        a plain-English string naming what was wrong; `Row` is the same
+        Last-touch cell is empty, has no parseable ISO date, or parses to
+        a date AFTER `today` (days_quiet would be negative — treated as a
+        likely typo'd year, not a valid touch date). `reason` is a
+        plain-English string naming what was wrong; `Row` is the same
         header-keyed object parse_tracker produces, so a caller can still
         read Company/Role/etc off it.
 
@@ -78,6 +85,12 @@ def stale_active(text: str, today: date, days: int):
             continue
 
         days_quiet = (today - latest).days
+        if days_quiet < 0:
+            unknown_touch.append((row, (
+                f"Last touch is in the future ({latest.isoformat()}) — "
+                "check for a typo'd year")))
+            continue
+
         if days_quiet >= days:
             stale.append(StaleRow(
                 company=row.get("Company") or "",
