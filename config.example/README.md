@@ -17,9 +17,14 @@ hand, and it is the reference `/setup` follows.
 
 By hand:
 
-1. Copy this whole folder to `config/` at the repo root: `cp -r config.example config`.
-   **Only if `config/` doesn't exist yet** — it is gitignored, so a `cp -r` over a populated
-   one destroys judgment that no `git checkout` brings back.
+1. **If you are reading this inside `config.example/`:** copy the whole folder to `config/`
+   at the repo root — `cp -r config.example config`, **only if `config/` doesn't exist
+   yet**. Run it over a populated one and `cp -r` doesn't overwrite your judgment, it NESTS:
+   you end up with a second copy at `config/config.example/` that nothing reads. Your real
+   files survive untouched, but so does the mistake; delete `config/config.example` to
+   clean up.
+   **If you are reading this inside `config/`:** this copy already happened — this folder is
+   your live judgment layer. Skip straight to editing the files below.
 2. Edit every file in `config/` to reflect your own search: your target titles and
    locations, your kill rules, your comp floor, your scoring weights, your output paths,
    your excluded companies.

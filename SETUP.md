@@ -60,9 +60,11 @@ cp -r config.example config              # ONLY if config/ doesn't exist yet
 .venv/bin/python tools/doctor.py         # fix every FAIL before you start authoring
 ```
 
-**That `cp -r` only ever runs when `config/` doesn't exist.** `config/` is gitignored, so a
-`cp -r` over a populated one destroys kill rules, a comp floor, and a claim ledger that no
-`git checkout` brings back.
+**That `cp -r` only ever runs when `config/` doesn't exist.** Run it over a populated
+`config/` and nothing gets destroyed — `cp -r` NESTS instead, dropping a second copy of the
+example at `config/config.example/` that nothing in this repo reads. Your kill rules, comp
+floor, and claim ledger stay exactly as they were; the nested copy is inert clutter, and
+`rm -rf config/config.example` clears it.
 
 Straight after the copy, the doctor should carry no FAIL — a tracker SKIP is expected, and
 so is a WARN on typst or jobspy if you skipped one of those (paths will be yours):
@@ -502,6 +504,8 @@ file and leaving the key null wires nothing.
 **`FAIL tracker: tracker configured at <path> but the file does not exist`** → fix the path
 in `settings.yaml` or move the file back. Anything else the tracker check reports is a
 contract violation from section 4, quoted with its line number.
+
+**`OK   tracker: <path> matches the tracker format contract`** → clean; nothing to fix.
 
 ### The radar
 

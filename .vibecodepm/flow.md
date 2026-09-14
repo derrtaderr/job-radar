@@ -44,9 +44,10 @@ git config core.hooksPath .githooks
 
 The doctor runs nine checks (python version, venv + packages, jobspy, typst, config,
 profile, the privacy hook, `.gitignore` integrity, tracker) and is read-only — every fix it
-prints is a command the human runs, never one the doctor runs for them. A fresh clone with
-no `config/` yet gets one FAIL (config) and everything else either passes or SKIPs behind
-it; that FAIL is expected, not a broken install.
+prints is a command the human runs, never one the doctor runs for them. Run it right after
+the clone, before the `git config core.hooksPath` and `cp -r config.example config` steps
+above, and a fresh clone gets two FAILs (config, privacy hook) with everything else either
+passing or SKIPping behind them; both FAILs are expected, not a broken install.
 
 ### The demo detour
 
