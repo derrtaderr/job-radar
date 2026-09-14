@@ -213,6 +213,43 @@ MORE_CELLS_THAN_HEADERS = """\
 | Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
 """
 
+# An overflow row (more cells than headers) keeps its LEADING cells aligned
+# with the headers — only the excess trailing cell(s) are unpositioned. So
+# unlike the too-FEW-cells case, the ISO-date and duplicate checks still
+# apply to those leading cells; the cell-count violation fires either way.
+# Here Last touch is the row's 3rd (aligned) cell and carries a bad date.
+OVERFLOW_ROW_WITH_BAD_DATE_IN_ALIGNED_COLUMN = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | TBD | Extra cell |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
+"""
+
+# Same idea for the duplicate-Company+Role check: two overflow rows whose
+# leading Company/Role cells are aligned and identical must still be flagged,
+# even though each row also carries an extra trailing cell.
+OVERFLOW_ROWS_WITH_DUPLICATE_IN_ALIGNED_COLUMNS = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | 2026-09-10 | Extra one |
+| Cobalt Grid | Data Platform Engineer | 2026-09-11 | Extra two |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
+"""
+
 # A row short one cell shifts every later column left by one position — the
 # shape of a real malformed row found on a live tracker (5 cells vs 6
 # headers). Once the cell count is wrong, column identity can't be trusted,
