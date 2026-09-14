@@ -45,6 +45,36 @@ def test_jd_keywords_drops_a_stopword_even_at_high_frequency():
     assert "experience" not in keywords
 
 
+def test_jd_keywords_drops_filler_leaked_on_a_real_jd_run_even_at_high_frequency():
+    # Observed leaking as fake "keywords" on a real JD run: pronouns/
+    # determiners ("that", "who", "every", "what") and generic JD nouns
+    # ("new", "hire", "hiring", "teams", "risk") that carry no ATS signal
+    # no matter how often the posting repeats them.
+    jd = (
+        "Someone who thrives on ambiguity is exactly the person that we "
+        "want. Every new hire joins a hiring squad that spans multiple "
+        "teams, and every hire owns risk end to end. Who else but someone "
+        "who has done this before. That is who we are hiring for, and "
+        "that is the risk every one of our teams carries.")
+
+    keywords = ats_check.jd_keywords(jd)
+
+    for filler in ("that", "who", "every", "what", "new", "hire",
+                   "hiring", "teams", "risk"):
+        assert filler not in keywords
+
+
+def test_jd_keywords_never_surfaces_that_or_who_even_at_higher_frequency():
+    # Pinned per the Phase 3 brief: "that" and "who" must never appear in
+    # jd_keywords output, independent of how high their frequency climbs.
+    jd = " ".join(["that", "who"] * 10)
+
+    keywords = ats_check.jd_keywords(jd)
+
+    assert "that" not in keywords
+    assert "who" not in keywords
+
+
 def test_jd_keywords_drops_a_term_seen_only_once():
     keywords = ats_check.jd_keywords(SYNTHETIC_JD)
 

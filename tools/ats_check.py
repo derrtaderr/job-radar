@@ -32,7 +32,7 @@ NO_STUFFING_LINE = (
     "Gaps are gaps. If the profile genuinely supports one, work it in; "
     "if not, it stays visible — never stuffed.")
 
-# ~80 common English words plus JD filler that would otherwise dominate
+# ~100 common English words plus JD filler that would otherwise dominate
 # keyword frequency without carrying any ATS signal. Exact membership is
 # a judgment call — tests pin behavior via a synthetic JD, not this list.
 STOP_WORDS = frozenset({
@@ -52,6 +52,14 @@ STOP_WORDS = frozenset({
     "preferred", "including", "include", "etc", "looking", "seeking",
     "join", "opportunity", "candidate", "candidates", "environment",
     "must", "ideal", "position", "company",
+    # Observed leaking as fake "keywords" on a real JD run — pronouns and
+    # determiners the token regex happily matches, plus generic JD nouns
+    # that describe the posting rather than the job's actual substance.
+    "that", "who", "what", "every", "new", "hire", "hiring", "teams",
+    "risk",
+    # Same class of pronoun/conjunction filler, added alongside them
+    # rather than waiting for a second leak to prove the pattern.
+    "their", "them", "they", "this", "these", "those", "which", "while",
 })
 
 # Fraction of characters outside \t\n\x20-\x7E plus common Unicode
