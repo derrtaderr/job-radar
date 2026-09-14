@@ -192,7 +192,17 @@ def touch_row(text: str, section: str, company: str, role: str,
     old_line = lines[matched.line - 1]
     pipes = [m.start() for m in _UNESCAPED_PIPE_POS.finditer(old_line)]
     new_cell = " " + _escape_cell(value) + " "
-    new_line = (old_line[: pipes[col_idx] + 1] + new_cell
-                + old_line[pipes[col_idx + 1]:])
+    # A row without a trailing pipe ("| a | b | c") is legal markdown, and
+    # tracker_check passes it clean, so this is a shape touch_row genuinely
+    # meets. There is no pipe after the last cell to splice against, so the
+    # replacement runs to end of line instead. Any other column still splices
+    # between its two pipes exactly as before — the whole point of this
+    # function is leaving neighbouring cells byte-identical.
+    end = pipes[col_idx + 1] if col_idx + 1 < len(pipes) else len(old_line)
+    new_line = (old_line[: pipes[col_idx] + 1] + new_cell + old_line[end:])
+    if end == len(old_line):
+        # The cell text is normally followed by the next pipe; with nothing
+        # after it, the padding space would be left dangling at EOL.
+        new_line = new_line.rstrip()
     lines[matched.line - 1] = new_line
     return _join(lines, trailing_newline)
