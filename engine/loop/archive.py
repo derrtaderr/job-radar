@@ -78,8 +78,11 @@ def _render_outcome(frontmatter: dict, log_lines: list) -> str:
 
 
 def archive_application(apply_dir: Path, archive_dir: Path, meta: dict) -> Path:
-    """Copy `apply_dir`'s files into `archive_dir/<apply_dir.name>/` and
-    write its outcome.md. `meta` must carry company/role/applied — a
+    """Copy `apply_dir`'s contents into `archive_dir/<apply_dir.name>/` and
+    write its outcome.md. Files are copied as-is; subdirectories are
+    copied recursively (shutil.copytree) — the archive is supposed to be
+    a faithful mirror of apply-out, so nothing under apply_dir is allowed
+    to vanish silently. `meta` must carry company/role/applied — a
     missing key raises ArchiveError naming it, before anything is
     written. Refuses (ArchiveError, naming the slug) if the destination
     already exists, so a second archive attempt can never clobber the
@@ -98,7 +101,9 @@ def archive_application(apply_dir: Path, archive_dir: Path, meta: dict) -> Path:
 
     dest.mkdir(parents=True)
     for item in sorted(apply_dir.iterdir()):
-        if item.is_file():
+        if item.is_dir():
+            shutil.copytree(item, dest / item.name)
+        else:
             shutil.copy2(item, dest / item.name)
 
     frontmatter = {
