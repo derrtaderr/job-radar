@@ -12,9 +12,9 @@ All fixtures are synthetic (fictional companies, real column-header shape).
 """
 import difflib
 
-from engine.loop.tracker_edit import TrackerEditError, add_row
+from engine.loop.tracker_edit import TrackerEditError, add_row, move_row
 from engine.loop.tracker_schema import parse_tracker
-from tests.fixtures_tracker import VALID_TRACKER
+from tests.fixtures_tracker import DUPLICATE_COMPANY_ROLE, VALID_TRACKER
 
 
 # --- diff helpers --------------------------------------------------------
@@ -117,3 +117,115 @@ def test_add_row_unknown_section_raises_naming_it():
         assert False, "expected TrackerEditError"
     except TrackerEditError as e:
         assert "not-a-real-section" in str(e)
+
+
+# --- move_row: diff helper -------------------------------------------------
+
+def _assert_only_move(old_text, new_text):
+    """Assert new_text is old_text with exactly one line removed and
+    exactly one line inserted elsewhere — every other line unchanged, in
+    order, wherever it now sits. Returns (removed_line, inserted_line)."""
+    old_lines, new_lines, opcodes = _opcodes(old_text, new_text)
+    removed, inserted = [], []
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == "equal":
+            continue
+        removed += old_lines[i1:i2]
+        inserted += new_lines[j1:j2]
+    assert len(removed) == 1, (removed, opcodes)
+    assert len(inserted) == 1, (inserted, opcodes)
+    return removed[0], inserted[0]
+
+
+# --- move_row: happy path ---------------------------------------------------
+
+def test_move_row_maps_shared_columns_drops_source_only_takes_extra():
+    new_text = move_row(
+        VALID_TRACKER, "Meridian Analytics", "Analytics Engineer",
+        "drafted but not applied", "active",
+        {"Stage": "Applied", "Last touch": "2026-09-13"})
+    _assert_only_move(VALID_TRACKER, new_text)
+
+    sections = parse_tracker(new_text)
+    assert sections["drafted but not applied"].rows == []
+
+    active_companies = {r["Company"]: r for r in sections["active"].rows}
+    row = active_companies["Meridian Analytics"]
+    assert row["Role"] == "Analytics Engineer"
+    assert row["Source"] == "Job board"          # shared, carried from source
+    assert row["Comp band"] == "140-165k"        # shared, carried from source
+    assert row["Next step"] == "Finish cover letter"
+    assert row["Notes"] == "JD emphasizes SQL"
+    assert row["Stage"] == "Applied"             # target-only, from extra
+    assert row["Last touch"] == "2026-09-13"     # target-only, from extra
+    # "Resume" was Drafted-only — nothing to carry it forward to in Active,
+    # and the interface is by name, so it never shows up under a wrong key.
+
+
+def test_move_row_matches_annotation_tolerant_company_cell():
+    # Tracker cell is "Harborlight (via referral)"; caller passes the bare
+    # name, same tolerance tracker_suppresses gives a scraped company name.
+    new_text = move_row(
+        VALID_TRACKER, "Harborlight", "Senior Data Engineer",
+        "active", "closed",
+        {"Date closed": "2026-09-13", "Outcome": "Withdrew"})
+    _assert_only_move(VALID_TRACKER, new_text)
+
+    sections = parse_tracker(new_text)
+    assert not any("Harborlight" in (r.get("Company") or "")
+                   for r in sections["active"].rows)
+    closed = next(r for r in sections["closed"].rows
+                  if "Harborlight" in r["Company"])
+    assert closed["Company"] == "Harborlight (via referral)"
+    assert closed["Role"] == "Senior Data Engineer"
+    assert closed["Date closed"] == "2026-09-13"
+    assert closed["Outcome"] == "Withdrew"
+
+
+# --- move_row: refusal cases -------------------------------------------------
+
+def test_move_row_zero_match_raises_naming_company_and_role():
+    try:
+        move_row(VALID_TRACKER, "Nonexistent Corp", "Ghost Role",
+                 "active", "closed", {})
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "Nonexistent Corp" in str(e) and "Ghost Role" in str(e)
+
+
+def test_move_row_ambiguous_match_raises_naming_both_lines():
+    try:
+        move_row(DUPLICATE_COMPANY_ROLE, "Cobalt Grid", "Data Platform Engineer",
+                 "active", "closed", {})
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        msg = str(e)
+        assert "Cobalt Grid" in msg or "2" in msg
+        assert "5" in msg and "6" in msg  # the two matching data-row lines
+
+
+def test_move_row_unknown_from_section_raises():
+    try:
+        move_row(VALID_TRACKER, "Cobalt Grid", "Data Platform Engineer",
+                 "not-a-section", "closed", {})
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "not-a-section" in str(e)
+
+
+def test_move_row_unknown_to_section_raises():
+    try:
+        move_row(VALID_TRACKER, "Cobalt Grid", "Data Platform Engineer",
+                 "active", "not-a-section", {})
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "not-a-section" in str(e)
+
+
+def test_move_row_unknown_extra_key_raises_naming_it():
+    try:
+        move_row(VALID_TRACKER, "Meridian Analytics", "Analytics Engineer",
+                 "drafted but not applied", "active", {"Salary": "999k"})
+        assert False, "expected TrackerEditError"
+    except TrackerEditError as e:
+        assert "Salary" in str(e)
