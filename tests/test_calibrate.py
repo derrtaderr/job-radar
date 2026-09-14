@@ -1032,3 +1032,71 @@ def test_results_stay_in_tracker_order_across_both_passes(tmp_path):
         closed_rows(tracker), tmp_path / "archive")
 
     assert [j.row.get("Company") for j in joined] == ["Harborlight Data", "Widget Co"]
+
+
+# --- I3: a misaligned tracker row is read positionally, so say so ----------
+
+_MALFORMED_TRACKER = (
+    "## Active\n\n"
+    "| Company | Role | Last touch |\n"
+    "|---|---|---|\n"
+    "| Ravenswood Data | Data Engineer | 2026-09-10 |\n\n"
+    "## Closed\n\n"
+    "| Company | Role | Date closed | Outcome | Reason | Carry-forward lesson |\n"
+    "|---|---|---|---|---|---|\n"
+    "| Cobalt Grid | Data Engineer | 2026-05-01 | Offer | n/a | n/a |\n"
+    "| Tessellate | Data Engineer | 2026-05-02 | No response | n/a |\n")
+
+
+def _report_for(tmp_path, tracker_text):
+    from engine.loop.calibrate import calibration_report
+    from engine.radar.config import load_config
+    from tests.fixtures_season import build_config
+    (tmp_path / "archive").mkdir(exist_ok=True)
+    cfg = load_config(build_config(tmp_path))
+    return calibration_report(tracker_text, tmp_path / "archive", cfg)
+
+
+def test_a_failing_tracker_row_is_named_in_the_summary(tmp_path):
+    # The last Closed row is a cell short, so every column past the break is
+    # read positionally — "n/a" lands under Carry-forward lesson while Reason
+    # holds what the author meant as the lesson. parse_tracker cannot tell,
+    # and Outcome could just as easily be the cell that shifted. The report
+    # still runs (it is read-only and worth having), but it says so.
+    summary = _section(_report_for(tmp_path, _MALFORMED_TRACKER), "## Summary")
+    assert "1 tracker rows failed check" in summary
+    assert "misaligned" in summary
+    assert "tracker_cli.py check" in summary
+
+
+def test_a_clean_tracker_says_nothing_about_check(tmp_path):
+    # The line is a warning, not a status field. A clean tracker must not
+    # carry "0 tracker rows failed check" — a caveat that fires every run is
+    # one nobody reads on the run that matters.
+    _, report = _report(tmp_path)
+    assert "failed check" not in report
+
+
+def test_a_failing_tracker_still_produces_the_whole_report(tmp_path):
+    # Never abort. The report edits nothing, and refusing to render it would
+    # withhold the one artifact that makes the misalignment visible.
+    report = _report_for(tmp_path, _MALFORMED_TRACKER)
+    for heading in ("## Summary", "## Outcome contrasts", "## Proposals",
+                    "## Suppressed proposals"):
+        assert heading in report
+    assert "never edits config" in report
+
+
+def test_the_cli_carries_the_check_warning_too(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_config
+    tracker_path = tmp_path / "tracker.md"
+    tracker_path.write_text(_MALFORMED_TRACKER)
+    (tmp_path / "archive").mkdir()
+    config_dir = build_config(tmp_path)
+
+    code = main([str(tracker_path), "--archive", str(tmp_path / "archive"),
+                 "--config", str(config_dir)])
+
+    assert code == 0, "a malformed tracker is a warning, never a refusal"
+    assert "1 tracker rows failed check" in capsys.readouterr().out
