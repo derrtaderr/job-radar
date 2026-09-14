@@ -80,12 +80,54 @@ def _importable(name: str) -> bool:
 
 # --- individual checks -------------------------------------------------------
 
+def _python_version_info():
+    # A thin wrapper around sys.version_info so tests can monkeypatch THIS
+    # (via monkeypatch.setattr(doctor, "_python_version_info", ...)) instead
+    # of the real sys.version_info — patching the real one breaks any
+    # library that reads it at import time (bs4, pulled in transitively by
+    # jobspy, is one), which fires mid-test since checks run in-process.
+    return sys.version_info
+
+
 def _check_python_version() -> CheckResult:
-    info = sys.version_info
+    info = _python_version_info()
     version = f"{info[0]}.{info[1]}.{info[2]}"
     ok = tuple(info[:2]) >= MIN_PYTHON
     fix = "" if ok else f"install Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or newer"
     return CheckResult("python version", ok, f"python {version}", fix)
+
+
+_VENV_FIX = ".venv/bin/pip install -r requirements.txt -r requirements-dev.txt"
+
+
+def _check_venv_and_required_packages(repo_root: Path) -> CheckResult:
+    venv_dir = repo_root / ".venv"
+    if not venv_dir.is_dir():
+        return CheckResult(
+            "venv + required packages", False,
+            f"no .venv/ found at {venv_dir}",
+            f"python3 -m venv .venv && {_VENV_FIX}")
+
+    missing = [name for name in REQUIRED_PACKAGES if not _importable(name)]
+    if missing:
+        return CheckResult(
+            "venv + required packages", False,
+            f".venv/ present but not importable: {', '.join(missing)}",
+            _VENV_FIX)
+
+    return CheckResult(
+        "venv + required packages", True,
+        f".venv/ present; {', '.join(REQUIRED_PACKAGES)} importable", "")
+
+
+def _check_jobspy() -> CheckResult:
+    if _importable("jobspy"):
+        return CheckResult("jobspy", True, "jobspy importable", "")
+    return CheckResult(
+        "jobspy", "warn",
+        "jobspy not importable — the radar (scrape) needs it, "
+        "drafting/loop tools don't",
+        "pip install python-jobspy")
 
 
 # --- orchestration ------------------------------------------------------------
@@ -100,4 +142,6 @@ def run_checks(repo_root, config_dir) -> list:
 
     return [
         _check_python_version(),
+        _check_venv_and_required_packages(repo_root),
+        _check_jobspy(),
     ]
