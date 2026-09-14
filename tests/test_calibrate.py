@@ -228,3 +228,174 @@ def test_join_is_deterministic_across_archive_listing_order(tmp_path):
     first = join_archives(rows, tmp_path / "archive")[0][0].archive.name
     second = join_archives(rows, tmp_path / "archive")[0][0].archive.name
     assert first == second == "acorn-data-engineer"
+
+
+# --- calibration_report: the season, and the honesty rules ------------------
+
+def _report(tmp_path, **kwargs):
+    from engine.loop.calibrate import calibration_report
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+    return season, calibration_report(
+        season.tracker_text, season.archive_dir, season.cfg, **kwargs)
+
+
+def _section(report: str, heading: str) -> str:
+    """The body under one '## ' heading, up to the next one."""
+    assert heading in report, f"no {heading!r} section in report"
+    after = report.split(heading, 1)[1]
+    return after.split("\n## ", 1)[0]
+
+
+def test_sections_appear_in_the_contracted_order(tmp_path):
+    _, report = _report(tmp_path)
+    order = [report.index(h) for h in (
+        "## Summary", "## Outcome contrasts", "## Proposals",
+        "## Suppressed proposals")]
+    assert order == sorted(order)
+
+
+def test_header_carries_totals_and_the_join_rate(tmp_path):
+    season, report = _report(tmp_path)
+    summary = _section(report, "## Summary")
+    assert season.closed_count == 20 and season.joined_count == 13
+    assert "Closed applications: 20" in summary
+    assert "Joined to an archive: 13 (65%)" in summary
+    assert "Unjoined (no archive match): 7" in summary
+
+
+def test_header_counts_every_outcome_class(tmp_path):
+    _, report = _report(tmp_path)
+    summary = _section(report, "## Summary")
+    for line in ("- offer: 2", "- rejected-at-screen: 4", "- rejected-later: 4",
+                 "- timed-out: 2", "- no-response: 5", "- withdrawn: 2",
+                 "- other: 1"):
+        assert line in summary, f"missing class count: {line}"
+
+
+def test_other_bucket_carries_its_outcome_verbatim(tmp_path):
+    # The honesty rule: an Outcome the mapping never anticipated must be
+    # readable in the report, not folded into a count with no name.
+    _, report = _report(tmp_path)
+    assert '"Role frozen": 1' in _section(report, "## Summary")
+
+
+def test_header_documents_the_contrast_grouping(tmp_path):
+    # A reader who does not know that "interviewed" means offer plus
+    # rejected-later cannot judge a single proposal below it.
+    summary = _section(_report(tmp_path)[1], "## Summary")
+    assert "offer + rejected-later" in summary
+    assert "no-response + rejected-at-screen + timed-out" in summary
+    assert "6 joined" in summary and "7 joined" in summary
+
+
+def test_every_contrast_line_carries_ns_on_both_sides(tmp_path):
+    _, report = _report(tmp_path)
+    contrasts = _section(report, "## Outcome contrasts")
+    assert "- comp listed in the JD: 5 of 6 interviewed (83%) vs 1 of 7 negative-outcome (14%) — 69-point gap" in contrasts
+    assert "- remote language in the JD: 4 of 6 interviewed (67%) vs 5 of 7 negative-outcome (71%) — 5-point gap" in contrasts
+    assert "- a title-tier hit on the role title: 4 of 6 interviewed (67%) vs 4 of 7 negative-outcome (57%) — 10-point gap" in contrasts
+    assert "- kill-rule language in the JD: 0 of 6 interviewed (0%) vs 5 of 7 negative-outcome (71%) — 71-point gap" in contrasts
+
+
+def test_exactly_two_proposals_clear_the_floor_with_pinned_ns(tmp_path):
+    # The spec's done-condition, pinned. Both proposals name the config file
+    # and key they suggest changing, and quote their own evidence with Ns.
+    _, report = _report(tmp_path)
+    proposals = _section(report, "## Proposals")
+    assert proposals.count("\n- ") == 2, proposals
+    assert (
+        "- `weights.yaml`: consider lowering `unlisted_comp_pts` — "
+        "6 of 7 negative-outcome applications had unlisted comp, "
+        "vs 1 of 6 interviewed (69-point gap, floor N=5)." in proposals)
+    assert (
+        "- `rules.yaml`: consider tightening `rules` — "
+        "6 of 6 interviewed applications had no kill-rule language in the JD, "
+        "vs 2 of 7 negative-outcome (71-point gap, floor N=5)." in proposals)
+
+
+def test_suppressed_section_names_both_underpowered_contrasts(tmp_path):
+    _, report = _report(tmp_path)
+    suppressed = _section(report, "## Suppressed proposals")
+    assert suppressed.count("\n- ") == 2, suppressed
+    assert (
+        "- remote language in the JD: gap below threshold (5-point gap vs the "
+        "20-point threshold; interviewed N=6, negative-outcome N=7, "
+        "floor N=5)." in suppressed)
+    assert (
+        "- a title-tier hit on the role title: gap below threshold (10-point "
+        "gap vs the 20-point threshold; interviewed N=6, negative-outcome N=7, "
+        "floor N=5)." in suppressed)
+
+
+def test_every_contrast_lands_in_exactly_one_of_the_two_sections(tmp_path):
+    # The invariant that makes the suppressed section trustworthy: four
+    # contrasts in, four accounted for. A contrast that appeared in neither
+    # would be a silent drop wearing a report's clothes.
+    _, report = _report(tmp_path)
+    proposed = _section(report, "## Proposals").count("\n- ")
+    suppressed = _section(report, "## Suppressed proposals").count("\n- ")
+    assert proposed + suppressed == 4
+
+
+def test_closing_line_states_the_report_never_edits_config(tmp_path):
+    _, report = _report(tmp_path)
+    assert "never edits config" in report
+    assert "by hand" in report
+
+
+def test_report_is_byte_identical_across_runs(tmp_path):
+    # No clock, no randomness, no filesystem listing order. Two runs over the
+    # same inputs produce the same bytes or the report cannot be diffed.
+    from engine.loop.calibrate import calibration_report
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+    first = calibration_report(season.tracker_text, season.archive_dir, season.cfg)
+    second = calibration_report(season.tracker_text, season.archive_dir, season.cfg)
+    assert first == second
+
+
+def test_raising_min_n_suppresses_both_proposals(tmp_path):
+    # min_n is the honesty dial. Turned above the group sizes, nothing may
+    # survive into Proposals, and all four contrasts move to suppressed with
+    # their real Ns named.
+    _, report = _report(tmp_path, min_n=8)
+    assert "no proposal cleared the floor" in _section(report, "## Proposals").lower()
+    suppressed = _section(report, "## Suppressed proposals")
+    assert suppressed.count("\n- ") == 4
+    assert "insufficient data" in suppressed
+    assert "interviewed N=6" in suppressed and "floor N=8" in suppressed
+
+
+def test_insufficient_data_names_the_actual_ns_and_the_floor(tmp_path):
+    # Pinned on a deliberately thin season rather than the full one: the three
+    # JD-text contrasts always share a denominator, so a season cannot show
+    # two proposals AND an insufficient-data suppression at once.
+    from engine.loop.calibrate import calibration_report
+    from tests.fixtures_season import build_config
+
+    tracker = _closed(
+        "Cobalt Grid | Data Engineer | 2026-05-01 | Offer | n/a | n/a",
+        "Tessellate | Data Engineer | 2026-05-02 | Rejected after onsite | n/a | n/a",
+        "Pinecrest Software | Data Engineer | 2026-05-03 | No response | n/a | n/a")
+    for slug, company in (("cobalt-grid", "Cobalt Grid"),
+                          ("tessellate", "Tessellate"),
+                          ("pinecrest", "Pinecrest Software")):
+        _archive(tmp_path, slug, company, "Data Engineer")
+
+    from engine.radar.config import load_config
+    cfg = load_config(build_config(tmp_path))
+    report = calibration_report(tracker, tmp_path / "archive", cfg, min_n=5)
+
+    suppressed = _section(report, "## Suppressed proposals")
+    assert suppressed.count("\n- ") == 4
+    assert "insufficient data (interviewed N=2, negative-outcome N=1; floor N=5)" in suppressed
+
+
+def test_unjoined_rows_never_reach_the_contrasts(tmp_path):
+    # Seven Closed rows have no archive. The contrast denominators are 6 and
+    # 7, not 6 and 11 — a feature cannot be read off a posting nobody kept.
+    _, report = _report(tmp_path)
+    contrasts = _section(report, "## Outcome contrasts")
+    assert "of 11" not in contrasts
+    assert "Joined applications only" in contrasts
