@@ -273,3 +273,35 @@ def run_checks(repo_root, config_dir) -> list:
         _check_gitignore(repo_root),
         _check_tracker(config, config_error),
     ]
+
+
+# --- CLI ----------------------------------------------------------------------
+
+def main(argv=None, repo_root: "Path | None" = None) -> int:
+    repo_root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parent.parent
+
+    parser = argparse.ArgumentParser(
+        prog="doctor",
+        description="Read-only environment and config health check for job-radar.")
+    parser.add_argument(
+        "--config", default=None,
+        help="config directory to check (default: <repo root>/config)")
+    args = parser.parse_args(argv)
+
+    config_dir = Path(args.config) if args.config else (repo_root / "config")
+
+    results = run_checks(repo_root, config_dir)
+
+    exit_code = 0
+    for result in results:
+        print(f"{result.status:<4} {result.name}: {result.detail}")
+        if result.fix:
+            print(f"     fix: {result.fix}")
+        if result.status == "FAIL":
+            exit_code = 1
+
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
