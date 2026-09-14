@@ -16,3 +16,6 @@ radar-out/
 # Per-application drafts (cover letters, tailored resumes, etc.) hold real
 # personal data — never committable by accident.
 apply-out/
+
+# Custom templates registered via /add-template may embed personal header data.
+templates/custom/
