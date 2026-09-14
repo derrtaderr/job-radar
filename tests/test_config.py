@@ -202,3 +202,45 @@ def test_followup_after_days_float_rejected(tmp_path):
     (tmp_path / "exclusions.txt").write_text("")
     with pytest.raises(ConfigError, match="followup_after_days"):
         load_config(tmp_path)
+
+
+# --- archive_dir: optional path key, defaults to ./archive -----------------
+# Same optional-key shape as `tracker: null` / followup_after_days (settings.yaml
+# may omit it entirely), resolved relative to config_dir.parent exactly like
+# output_dir/state_file/tracker.
+
+def _settings_without_archive_key(base_text: str) -> str:
+    lines = [l for l in base_text.splitlines() if not l.strip().startswith("archive_dir")]
+    return "\n".join(lines) + "\n"
+
+
+def test_archive_dir_defaults_to_archive_when_absent(tmp_path):
+    settings = _settings_without_archive_key((EXAMPLE / "settings.yaml").read_text())
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    cfg = load_config(tmp_path)
+    assert cfg.archive_dir == (tmp_path.parent / "archive").resolve()
+
+
+def test_archive_dir_custom_value_respected(tmp_path):
+    settings = _settings_without_archive_key((EXAMPLE / "settings.yaml").read_text())
+    settings += "archive_dir: ./my-archive\n"
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    cfg = load_config(tmp_path)
+    assert cfg.archive_dir == (tmp_path.parent / "my-archive").resolve()
+
+
+def test_archive_dir_non_string_rejected(tmp_path):
+    settings = _settings_without_archive_key((EXAMPLE / "settings.yaml").read_text())
+    settings += "archive_dir: yes\n"
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="archive_dir"):
+        load_config(tmp_path)
