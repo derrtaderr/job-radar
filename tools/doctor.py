@@ -140,6 +140,26 @@ def _check_typst() -> CheckResult:
         "brew install typst")
 
 
+_CONFIG_FIX = "cp -r config.example config"
+
+
+def _load_config_or_none(config_dir: Path):
+    """Try load_config once and hand back (config, error) — error is the
+    ConfigError's message string (never None-and-config-both-set). Checks 5
+    and 8 depend on a loaded Config, so they share this instead of each
+    calling load_config a second time and risking two different verdicts."""
+    try:
+        return load_config(config_dir), None
+    except ConfigError as exc:
+        return None, str(exc)
+
+
+def _check_config(config_dir: Path, error: "str | None") -> CheckResult:
+    if error is None:
+        return CheckResult("config", True, f"config loads from {config_dir}", "")
+    return CheckResult("config", False, error, _CONFIG_FIX)
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -149,10 +169,12 @@ def run_checks(repo_root, config_dir) -> list:
     Config to check yet."""
     repo_root = Path(repo_root)
     config_dir = Path(config_dir)
+    config, config_error = _load_config_or_none(config_dir)
 
     return [
         _check_python_version(),
         _check_venv_and_required_packages(repo_root),
         _check_jobspy(),
         _check_typst(),
+        _check_config(config_dir, config_error),
     ]

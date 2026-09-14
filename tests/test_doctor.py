@@ -142,3 +142,31 @@ def test_typst_absent_warns_with_brew_fix(tmp_path, monkeypatch):
     result = _result(results, "typst")
     assert result.ok == "warn"
     assert result.fix == "brew install typst"
+
+
+# --- check 4: config/ exists and load_config succeeds -----------------------
+
+def test_config_ok_when_config_example_copied_verbatim(tmp_path):
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "config")
+    assert result.ok is True
+
+
+def test_config_fails_with_cp_fix_when_config_dir_missing_entirely(tmp_path):
+    repo = _git_repo(tmp_path)
+    missing_dir = tmp_path / "config"  # never created
+    results = doctor.run_checks(repo, missing_dir)
+    result = _result(results, "config")
+    assert result.ok is False
+    assert result.fix == "cp -r config.example config"
+
+
+def test_config_surfaces_configerror_message_verbatim(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "settings.yaml").write_text("not: valid: yaml: [")
+    results = doctor.run_checks(repo, cfg_dir)
+    result = _result(results, "config")
+    assert result.ok is False
+    assert "bad yaml in settings.yaml" in result.detail
