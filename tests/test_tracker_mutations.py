@@ -570,3 +570,54 @@ def test_add_row_does_not_gate_sections_without_those_columns():
     from engine.loop.tracker_edit import add_row
     text = ("## Active\n\n| Note |\n|---|\n| something |\n")
     assert "| later |" in add_row(text, "Active", {"Note": "later"})
+
+
+# --- pinning two verified-but-untested behaviors ----------------------------
+# Neither of these is a bug fix — both already behave correctly. They were
+# reasoned through but never had a test locking the behavior in place.
+
+def test_add_row_into_final_section_with_no_trailing_newline():
+    # The fixture text has NO trailing "\n" after its last row — the
+    # section add_row appends to is the last thing in the file.
+    text = (
+        "## Active\n\n"
+        "| Company | Role | Last touch |\n"
+        "|---|---|---|\n"
+        "| Cobalt Grid | Data Engineer | 2026-09-10 |")
+    assert not text.endswith("\n")
+    new_text = add_row(text, "Active",
+                        {"Company": "Tessellate", "Role": "Data Engineer",
+                         "Last touch": "2026-09-13"})
+    assert new_text.startswith(text)
+    assert "| Tessellate | Data Engineer | 2026-09-13 |" in new_text
+    assert not new_text.endswith("\n")  # no newline was added that wasn't there
+    sections = parse_tracker(new_text)
+    companies = [r["Company"] for r in sections["active"].rows]
+    assert companies == ["Cobalt Grid", "Tessellate"]
+
+
+_ESCAPED_PIPE_BEFORE_TARGET = (
+    "## Active\n\n"
+    "| Company | Role | Notes | Last touch |\n"
+    "|---|---|---|---|\n"
+    "| Cobalt Grid | Data Engineer | Growth \\| Ops team | 2026-09-10 |\n")
+
+
+def test_touch_row_past_a_preceding_escaped_pipe_cell():
+    # The Notes cell BEFORE the touched Last touch cell carries an escaped
+    # literal pipe ("Growth \| Ops team"). touch_row locates cell boundaries
+    # by scanning for UNESCAPED pipes, so that embedded "\|" must not be
+    # mistaken for a column boundary when walking past it to reach the
+    # target cell further right.
+    new_text = touch_row(_ESCAPED_PIPE_BEFORE_TARGET, "active", "Cobalt Grid",
+                          "Data Engineer", "Last touch", "2026-09-13")
+    _, old_line, new_line = _assert_only_line_change(
+        _ESCAPED_PIPE_BEFORE_TARGET, new_text)
+    # the escaped-pipe Notes cell survives byte-for-byte
+    assert "Growth \\| Ops team" in new_line
+    assert "2026-09-13" in new_line and "2026-09-10" not in new_line
+
+    sections = parse_tracker(new_text)
+    row = sections["active"].rows[0]
+    assert row["Notes"] == "Growth | Ops team"
+    assert row["Last touch"] == "2026-09-13"
