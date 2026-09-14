@@ -62,7 +62,6 @@ def test_unknown_get_name_names_known_names(tmp_path):
 def test_missing_page_limit_names_the_entry(tmp_path):
     (tmp_path / "templates").mkdir()
     (tmp_path / "templates" / "resume.typ").write_text("")
-    (tmp_path / "templates.yaml").write_text("")
     (tmp_path / "templates" / "registry.yaml").write_text(
         "default_resume: broken\n"
         "default_cover: broken\n"
