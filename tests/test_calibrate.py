@@ -819,3 +819,54 @@ def test_evidence_never_quotes_a_bare_100_percent_claim(tmp_path):
         for hits, total in re.findall(r"(\d+) of (\d+)", line):
             if hits == total and hits != "0":
                 assert f"(N={total})" in line, line
+
+
+# --- M5: --min-n below 1 is meaningless, and the error says why -------------
+
+def test_cli_rejects_a_min_n_below_one(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    code = main([str(season.tracker_path),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir),
+                 "--min-n", "0"])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    # The message has to name what the floor is FOR. "must be >= 1" tells a
+    # user the rule and not the reason, and the reason is the whole point of
+    # the flag: it is what stops one application proposing a config change.
+    assert "--min-n" in err and "0" in err
+    assert "application" in err.lower()
+
+
+def test_cli_rejects_a_negative_min_n(tmp_path, capsys):
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    code = main([str(season.tracker_path),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir),
+                 "--min-n", "-3"])
+
+    assert code == 1
+    assert "--min-n" in capsys.readouterr().err
+
+
+def test_cli_accepts_min_n_of_one(tmp_path, capsys):
+    # 1 is a legitimate (if reckless) choice, and the noise floor still stops
+    # a single application from proposing. The guard is against meaningless
+    # input, not against a low bar.
+    from tools.calibrate import main
+    from tests.fixtures_season import build_season
+    season = build_season(tmp_path)
+
+    code = main([str(season.tracker_path),
+                 "--archive", str(season.archive_dir),
+                 "--config", str(season.config_dir),
+                 "--min-n", "1"])
+
+    assert code == 0
