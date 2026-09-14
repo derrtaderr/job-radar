@@ -37,6 +37,11 @@ cp -r config.example config
 .venv/bin/python radar.py              # the real run
 ```
 
+**`.venv/bin/python tools/demo.py`** — see the whole system run on fictional data before
+touching your own config: a full radar pass, a compiled and verified resume/cover letter, and
+a calibration report, all against `config.example`'s invented persona, written to `demo-out/`
+and nothing sent anywhere.
+
 Between the copy and the first run, fill in `config/`. Two ways: run **`/setup`** in a
 Claude Code session at the repo root, which runs the doctor first and then interviews you
 file by file, reading every pattern back in plain English before it writes one — or edit
