@@ -92,8 +92,10 @@ check surfaces the same condition as `FAIL config: no config at <dir> — copy c
 to config/ and edit it`, and every OTHER doctor check that needs a loaded config (profile,
 tracker) SKIPs behind it rather than piling a second, confusing error on top of the first. Fix is
 always `cp -r config.example config`, only when `config/` doesn't already exist — running it
-over a populated `config/` destroys judgment no `git checkout` brings back, which is why the
-doctor never runs this for you.
+over a populated `config/` doesn't destroy anything, it NESTS: you end up with a junk copy at
+`config/config.example/` that nothing in this repo reads, while your real files stay exactly
+as they were. `rm -rf config/config.example` clears it. That's still why the doctor never
+runs this for you — a confusing junk copy is not a fix.
 
 ### No typst
 
