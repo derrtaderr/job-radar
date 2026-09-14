@@ -5,7 +5,9 @@ Unlike engine/radar/tracker.py (which only cares about the first cell of a
 row, for suppression), this module reads every column by name and checks the
 tracker's shape: are the required sections and columns present, does every
 row's cell count match its header, does every date cell actually carry a
-date, is any Company+Role duplicated within a section. Task 3 edits the file
+date, is any Company+Role duplicated within a section where a role can't
+legitimately be live twice at once (Active, Drafted but not applied — not
+Closed or Research, which allow repeats by design). Task 3 edits the file
 by the line numbers this module reports, so `Row.line` must be exact — it is
 a 1-based position in the ORIGINAL text's `splitlines()`.
 """
@@ -31,6 +33,14 @@ _SECTION_TITLES = {"active": "Active", "closed": "Closed"}
 # wherever they show up (only Active and Closed name one today, but the check
 # is by column name, not by hardcoded section).
 _DATE_COLUMNS = {"last touch", "date closed"}
+
+# Duplicate Company+Role only gates a section where a role can't legitimately
+# be live twice at once. Closed and Research are append-only / low-commitment
+# by design — a company can reapply for the same role months apart (a real
+# tracker shows this for Crux, EZO.io, and Tempo, all closed-then-reactivated
+# or reapplied), so flagging a repeat there is a false positive, not a data
+# bug. Orchestrator ruling, 2026-09-13.
+_DUPLICATE_GATED_SECTIONS = {"active", "drafted but not applied"}
 
 
 class Row:
@@ -83,13 +93,19 @@ def _normalize_section_name(raw: str) -> str:
         name = name[: name.index("(")].strip()
     return name.lower()
 
+# A pipe preceded by a backslash is a literal "|" inside a cell (what the
+# radar's own report renderer produces), not a column boundary.
+_UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+
+
 def _split_row(line: str) -> list:
     stripped = line.strip()
     if stripped.startswith("|"):
         stripped = stripped[1:]
-    if stripped.endswith("|"):
-        stripped = stripped[:-1]
-    return [c.strip() for c in stripped.split("|")]
+    parts = _UNESCAPED_PIPE.split(stripped)
+    if parts and parts[-1].strip() == "":
+        parts = parts[:-1]
+    return [p.strip().replace("\\|", "|") for p in parts]
 
 def _is_separator_row(cells: list) -> bool:
     return bool(cells) and all(_SEPARATOR_CELL.match(c) for c in cells)
@@ -199,6 +215,7 @@ def tracker_check(text: str) -> list:
         n_headers = len(table.headers)
         header_lower = {h.lower() for h in table.headers}
         has_company_role = "company" in header_lower and "role" in header_lower
+        gate_duplicates = has_company_role and key in _DUPLICATE_GATED_SECTIONS
         date_columns = [h for h in table.headers if h.lower() in _DATE_COLUMNS]
 
         seen_company_role = {}
@@ -208,6 +225,12 @@ def tracker_check(text: str) -> list:
                 violations.append(
                     f"line {row.line}: row has {row.raw_cell_count} cells, "
                     f"header has {n_headers} ({title} section)")
+                # A wrong cell count means every column past the break point
+                # is misaligned — a value under "Date closed" may actually be
+                # what belongs in "Reason". Checking those columns anyway
+                # would report a symptom of this same bug as a second,
+                # unrelated violation, which is noise, not signal.
+                continue
 
             for column in date_columns:
                 cell = (row.get(column) or "").strip()
@@ -215,7 +238,7 @@ def tracker_check(text: str) -> list:
                     violations.append(
                         f"line {row.line}: {column} {cell!r} has no ISO date ({title} section)")
 
-            if has_company_role:
+            if gate_duplicates:
                 company = (row.get("Company") or "").strip().lower()
                 role = (row.get("Role") or "").strip().lower()
                 if company and role:
