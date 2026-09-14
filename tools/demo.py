@@ -149,14 +149,18 @@ def _reset_out_dir(out_dir: Path) -> "tuple[bool, str]":
       (c) --out exists and carries DEMO_SENTINEL — a prior demo run made
           this directory, so its contents are the demo's own to replace.
 
-    Anything else (a non-empty directory with no sentinel — a stranger's
-    file, another tool's output, a --out typo pointed at a real directory)
-    is refused outright: nothing is deleted, and the caller gets back a
-    message naming exactly why. Returns (ok, message); message is empty on
-    success.
+    Anything else — a non-empty directory with no sentinel (a stranger's
+    file, another tool's output, a --out typo pointed at a real directory),
+    or --out resolving to a plain file instead of a directory at all — is
+    refused outright: nothing is deleted, and the caller gets back a message
+    naming exactly why. Returns (ok, message); message is empty on success.
     """
     if not out_dir.exists():
         out_dir.mkdir(parents=True)
+    elif not out_dir.is_dir():
+        return False, (
+            f"--out points at {out_dir}, which is a file, not a directory "
+            "— pick an empty or new directory; nothing was deleted")
     elif any(out_dir.iterdir()):
         if not (out_dir / DEMO_SENTINEL).exists():
             return False, (
