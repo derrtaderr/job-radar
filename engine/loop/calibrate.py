@@ -331,6 +331,13 @@ class ContrastSpec:
     # group, and when it is more common among the negative group.
     verb_when_interviewed: str
     verb_when_negative: str
+    # The clause that carries the reader from the evidence AS FRAMED to the
+    # knob. Without it, a proposal can be correct and still unreadable: the
+    # evidence says "comp listed tracks with interviews" while the suggestion
+    # says "lower unlisted_comp_pts", and the reader has to perform the
+    # inversion themselves. The report does it in words instead.
+    bridge_when_interviewed: str
+    bridge_when_negative: str
 
 
 CONTRASTS = (
@@ -345,6 +352,10 @@ CONTRASTS = (
         # of it; if the reverse, the current penalty is too harsh.
         verb_when_interviewed="lowering",
         verb_when_negative="raising",
+        bridge_when_interviewed=(
+            "so an unlisted posting scores further below a listed one"),
+        bridge_when_negative=(
+            "so an unlisted posting is not penalised as heavily"),
     ),
     ContrastSpec(
         key="remote",
@@ -354,6 +365,8 @@ CONTRASTS = (
         config_key="remote_pts",
         verb_when_interviewed="raising",
         verb_when_negative="lowering",
+        bridge_when_interviewed="so remote language counts for more",
+        bridge_when_negative="so remote language counts for less",
     ),
     ContrastSpec(
         key="title_tier",
@@ -363,6 +376,10 @@ CONTRASTS = (
         config_key="title_tiers",
         verb_when_interviewed="raising",
         verb_when_negative="lowering",
+        bridge_when_interviewed=(
+            "so a tier hit pulls further ahead of `default_title_pts`"),
+        bridge_when_negative=(
+            "so a tier hit sits closer to `default_title_pts`"),
     ),
     ContrastSpec(
         key="kill_near_miss",
@@ -378,6 +395,10 @@ CONTRASTS = (
         # aggressive and should be loosened.
         verb_when_interviewed="loosening",
         verb_when_negative="tightening",
+        bridge_when_interviewed=(
+            "so these patterns stop killing postings that interview"),
+        bridge_when_negative=(
+            "so these patterns kill more of what goes nowhere"),
     ),
 )
 
@@ -472,44 +493,79 @@ class ContrastResult:
         checked by the caller, which knows the floor."""
         return self.interviewed_n, self.negative_n
 
-    def evidence(self) -> str:
-        """The strongest TRUE statement this contrast supports, leading with
-        whichever of the four (side, polarity) cells has the highest rate.
+    def _polarity_average(self, present: bool) -> float:
+        """The feature's average base rate across BOTH sides, in one
+        polarity. This is what decides how the evidence is framed."""
+        if present:
+            return (self.interviewed_rate + self.negative_rate) / 2
+        return ((100.0 - self.interviewed_rate)
+                + (100.0 - self.negative_rate)) / 2
 
-        Both polarities are honest descriptions of the same two counts, so
-        the choice is presentational — but it is not arbitrary. Leading with
-        the highest cell puts the most legible version of the finding first
-        ("6 of 7 negative-outcome applications had unlisted comp" rather than
-        "1 of 7 had comp listed"), and fixing the rule keeps the report
-        byte-reproducible. Ties break toward the earlier cell in this order.
+    def _leads_with_present(self) -> bool:
+        """Frame on whichever polarity is RARER across the two groups.
+
+        The rare condition is the one carrying the signal. When kill-rule
+        language appears in 0 of 6 interviewed and 5 of 7 negative, the
+        present polarity averages 36% and discriminates sharply, while the
+        absent polarity averages 64% and is true of most postings either way
+        — so "6 of 6 interviewed had NO kill-rule language" is a technically
+        true sentence that tells a reader almost nothing. Ties go to the
+        present polarity, which keeps the choice deterministic.
         """
-        cells = (
-            (self.interviewed_rate, INTERVIEWED_LABEL, NEGATIVE_LABEL,
-             self.spec.present_label, self.interviewed_hits, self.interviewed_n,
-             self.negative_hits, self.negative_n),
-            (100.0 - self.interviewed_rate, INTERVIEWED_LABEL, NEGATIVE_LABEL,
-             self.spec.absent_label,
-             self.interviewed_n - self.interviewed_hits, self.interviewed_n,
-             self.negative_n - self.negative_hits, self.negative_n),
-            (self.negative_rate, NEGATIVE_LABEL, INTERVIEWED_LABEL,
-             self.spec.present_label, self.negative_hits, self.negative_n,
-             self.interviewed_hits, self.interviewed_n),
-            (100.0 - self.negative_rate, NEGATIVE_LABEL, INTERVIEWED_LABEL,
-             self.spec.absent_label,
-             self.negative_n - self.negative_hits, self.negative_n,
-             self.interviewed_n - self.interviewed_hits, self.interviewed_n),
-        )
-        _rate_, lead, other, label, lead_hits, lead_n, other_hits, other_n = max(
-            cells, key=lambda c: c[0])
-        return (f"{lead_hits} of {lead_n} {lead} applications had {label}, "
-                f"vs {other_hits} of {other_n} {other}")
+        return self._polarity_average(True) <= self._polarity_average(False)
+
+    def _cell(self, hits: int, total: int, side: str, *, noun: bool) -> str:
+        """One side of the evidence sentence. A cell at 100% carries its N
+        inline, because this sentence gets quoted on its own and "every
+        application did X" hides whether that was seven applications or
+        two."""
+        text = f"{hits} of {total} {side}"
+        if noun:
+            text += " applications"
+        if total and hits == total:
+            text += f" (N={total})"
+        return text
+
+    def evidence(self) -> str:
+        """One sentence a human could quote on its own, framed on the rarer
+        polarity and leading with the side where it is more common."""
+        use_present = self._leads_with_present()
+        label = (self.spec.present_label if use_present
+                 else self.spec.absent_label)
+        i_hits = (self.interviewed_hits if use_present
+                  else self.interviewed_n - self.interviewed_hits)
+        n_hits = (self.negative_hits if use_present
+                  else self.negative_n - self.negative_hits)
+
+        if _rate(i_hits, self.interviewed_n) >= _rate(n_hits, self.negative_n):
+            lead = (i_hits, self.interviewed_n, INTERVIEWED_LABEL)
+            other = (n_hits, self.negative_n, NEGATIVE_LABEL)
+        else:
+            lead = (n_hits, self.negative_n, NEGATIVE_LABEL)
+            other = (i_hits, self.interviewed_n, INTERVIEWED_LABEL)
+
+        return (f"{self._cell(*lead, noun=True)} had {label}, "
+                f"vs {self._cell(*other, noun=False)}")
+
+    def _present_tracks_interviewed(self) -> bool:
+        """Which group the PRESENT feature is more common in. Independent of
+        how evidence() chose to frame the sentence — the knob direction is a
+        fact about the data, not about the phrasing."""
+        return self.interviewed_rate >= self.negative_rate
 
     def suggestion(self) -> str:
         verb = (self.spec.verb_when_interviewed
-                if self.interviewed_rate >= self.negative_rate
+                if self._present_tracks_interviewed()
                 else self.spec.verb_when_negative)
         return (f"`{self.spec.config_file}`: consider {verb} "
                 f"`{self.spec.config_key}`")
+
+    def bridge(self) -> str:
+        """The clause joining the evidence as framed to the knob, so the
+        reader never has to invert anything themselves."""
+        return (self.spec.bridge_when_interviewed
+                if self._present_tracks_interviewed()
+                else self.spec.bridge_when_negative)
 
     def contrast_line(self) -> str:
         return (f"- {self.spec.present_label}: "
@@ -683,7 +739,8 @@ def calibration_report(tracker_text: str, archive_dir, cfg,
                 f"{NEGATIVE_LABEL} N={negative_n}, floor N={min_n}).")
         else:
             proposals.append(
-                f"- {result.suggestion()} — {result.evidence()} "
+                f"- {result.suggestion()} — {result.evidence()}, "
+                f"{result.bridge()} "
                 f"({_pct(result.gap)}-point gap vs a "
                 f"{_pct(result.required_gap())}-point bar at these Ns, "
                 f"floor N={min_n}).")
