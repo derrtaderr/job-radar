@@ -376,3 +376,7 @@ Then these three, each only if there is something to say:
 Then stop. **Applying is the human's hand.** This command does not open the ATS, does not
 fill a form, does not send an email, and does not push a button on anyone's behalf — the
 last call on whether a document with someone's name on it goes out is theirs to make.
+
+Once they have applied by hand, `/outcome <company> — applied` is what records it: it archives
+this folder before the next drafting run can overwrite it, and moves the tracker row into
+Active.
