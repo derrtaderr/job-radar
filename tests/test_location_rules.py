@@ -56,3 +56,24 @@ def test_body_location_verb_is_case_insensitive_at_sentence_start():
 def test_sentence_initial_based_kills_location():
     row = make_row(is_remote=False, location="", description="Based in Chicago, IL.")
     assert "location" in _names(row)
+
+
+# --- jd_says_remote: the public name over the same detector -----------------
+# engine/loop/calibrate.py contrasts remote language against outcomes and needs
+# this detector. Importing a private name across packages makes a refactor of
+# rules_engine silently break the calibrator, so the behavior gets a public
+# name here rather than an underscore import there.
+
+def test_jd_says_remote_is_public_and_returns_evidence():
+    from engine.radar.rules_engine import jd_says_remote
+    assert "fully remote" in jd_says_remote("This is a fully remote position.")
+
+
+def test_jd_says_remote_skips_negated_mentions():
+    from engine.radar.rules_engine import jd_says_remote
+    assert jd_says_remote("This is not a remote position.") is None
+
+
+def test_jd_says_remote_on_silent_jd():
+    from engine.radar.rules_engine import jd_says_remote
+    assert jd_says_remote("We build data pipelines in Denver.") is None
