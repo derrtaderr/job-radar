@@ -338,3 +338,72 @@ def test_tracker_fails_when_configured_but_file_missing(tmp_path):
     results = doctor.run_checks(repo, cfg_dir)
     result = _result(results, "tracker")
     assert result.ok is False
+
+
+# --- CLI: python tools/doctor.py [--config DIR] ------------------------------
+
+def test_cli_prints_one_line_per_check_and_exits_0_when_all_ok(tmp_path, capsys):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+
+    exit_code = doctor.main(["--config", str(cfg_dir)], repo_root=repo)
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    for name in (
+        "python version", "venv + required packages", "jobspy", "typst",
+        "config", "profile", "privacy hook", "gitignore integrity", "tracker",
+    ):
+        assert name in out
+
+
+def test_cli_exits_1_when_any_check_fails(tmp_path, capsys):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path, hooks_path=None)  # privacy hook FAILs
+    cfg_dir = _config_dir(tmp_path)
+
+    exit_code = doctor.main(["--config", str(cfg_dir)], repo_root=repo)
+
+    assert exit_code == 1
+    assert "FAIL" in capsys.readouterr().out
+
+
+def test_cli_warn_never_flips_the_exit_code(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)  # typst WARNs
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+
+    exit_code = doctor.main(["--config", str(cfg_dir)], repo_root=repo)
+
+    out = capsys.readouterr().out
+    assert "WARN" in out
+    assert exit_code == 0
+
+
+def test_cli_runs_meaningfully_with_no_config_dir_at_all(tmp_path, capsys):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    missing_dir = tmp_path / "config"  # never created
+
+    exit_code = doctor.main(["--config", str(missing_dir)], repo_root=repo)
+
+    out = capsys.readouterr().out
+    assert exit_code == 1  # check 4 FAILs
+    assert "cp -r config.example config" in out
+    assert "SKIP" in out  # checks 5 and 8
+    # every other check still ran and printed
+    for name in ("python version", "venv + required packages", "jobspy",
+                 "typst", "privacy hook", "gitignore integrity"):
+        assert name in out
+
+
+def test_cli_defaults_config_dir_to_repo_root_slash_config(tmp_path):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    _config_dir(tmp_path)  # lands at tmp_path / "config", the default
+
+    exit_code = doctor.main([], repo_root=repo)
+
+    assert exit_code == 0
