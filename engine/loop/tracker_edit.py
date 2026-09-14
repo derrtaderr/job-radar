@@ -111,7 +111,8 @@ def _find_one_match(rows, company, role, section_key):
 
 # Sections where a row has to stay findable by Company+Role, because every
 # later edit to it (move, touch) matches on exactly those two cells. Same set
-# tracker_schema gates duplicates on, and for the same underlying reason.
+# tracker_schema gates duplicates on (tracker_schema._DUPLICATE_GATED_SECTIONS),
+# and for the same underlying reason — keep the two in sync.
 _IDENTITY_GATED_SECTIONS = {"active", "drafted but not applied"}
 _IDENTITY_COLUMNS = ("Company", "Role")
 
@@ -135,15 +136,9 @@ def _require_identity_cells(headers, values: dict, key: str) -> None:
         cell = value_lower.get(column.lower())
         if cell is None or not str(cell).strip():
             raise TrackerEditError(
-                f"add to {section_title(key)!r} needs a non-empty {column!r} "
+                f"add to {_section_title(key)!r} needs a non-empty {column!r} "
                 f"— a row without it can never be matched again by move or "
                 f"touch, and check will not catch it")
-
-
-def section_title(key: str) -> str:
-    return {"active": "Active"}.get(
-        key, " ".join(w.capitalize() if i == 0 else w
-                      for i, w in enumerate(key.split())))
 
 
 def add_row(text: str, section: str, values: dict) -> str:
