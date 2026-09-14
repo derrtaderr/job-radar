@@ -144,3 +144,61 @@ def test_comp_floor_bool_rejected(tmp_path):
     (tmp_path / "exclusions.txt").write_text("")
     with pytest.raises(ConfigError, match="comp_floor"):
         load_config(tmp_path)
+
+
+# --- followup_after_days: optional strict-int key, defaults to 10 ---------
+# Same optional-key shape as `tracker: null` (settings.yaml may omit it
+# entirely) plus the same int-not-bool guard as comp_floor/points (a
+# `followup_after_days: yes` typo must not silently become 1).
+
+def _settings_without_followup_key(base_text: str) -> str:
+    lines = [l for l in base_text.splitlines() if not l.strip().startswith("followup_after_days")]
+    return "\n".join(lines) + "\n"
+
+
+def test_example_config_has_followup_after_days_10():
+    cfg = load_config(EXAMPLE)
+    assert cfg.followup_after_days == 10
+
+
+def test_followup_after_days_defaults_to_10_when_absent(tmp_path):
+    settings = _settings_without_followup_key((EXAMPLE / "settings.yaml").read_text())
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    cfg = load_config(tmp_path)
+    assert cfg.followup_after_days == 10
+
+
+def test_followup_after_days_custom_value_respected(tmp_path):
+    settings = _settings_without_followup_key((EXAMPLE / "settings.yaml").read_text())
+    settings += "followup_after_days: 5\n"
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    cfg = load_config(tmp_path)
+    assert cfg.followup_after_days == 5
+
+
+def test_followup_after_days_bool_rejected(tmp_path):
+    settings = _settings_without_followup_key((EXAMPLE / "settings.yaml").read_text())
+    settings += "followup_after_days: yes\n"
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="followup_after_days"):
+        load_config(tmp_path)
+
+
+def test_followup_after_days_float_rejected(tmp_path):
+    settings = _settings_without_followup_key((EXAMPLE / "settings.yaml").read_text())
+    settings += "followup_after_days: 7.5\n"
+    (tmp_path / "settings.yaml").write_text(settings)
+    for f in ("queries", "rules", "weights"):
+        (tmp_path / f"{f}.yaml").write_text((EXAMPLE / f"{f}.yaml").read_text())
+    (tmp_path / "exclusions.txt").write_text("")
+    with pytest.raises(ConfigError, match="followup_after_days"):
+        load_config(tmp_path)
