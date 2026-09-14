@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ats_check — keyword-gap and text-layer sanity check for a compiled
-resume PDF against a job description. Reuses pdf_text (tools.verify_pdf)
-for extraction rather than re-implementing PDF parsing.
+resume PDF against a job description. Reuses pdf_text and the near-empty
+threshold/message (tools.verify_pdf) rather than re-implementing PDF
+parsing or maintaining a second copy of the same call.
 
 Two kinds of finding, and they are not the same weight. Hard failures
 (exit 1): a contact literal missing from the extracted text, or the text
@@ -23,7 +24,7 @@ if __package__ in (None, ""):
     # the cross-package import below resolves.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from tools.verify_pdf import pdf_text
+from tools.verify_pdf import NEAR_EMPTY_CHARS, NEAR_EMPTY_MESSAGE, pdf_text
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+#./-]{2,}")
 
@@ -56,8 +57,12 @@ STOP_WORDS = frozenset({
 # Fraction of characters outside \t\n\x20-\x7E plus common Unicode
 # punctuation that trips the garble check.
 GARBLE_THRESHOLD = 0.15
-NEAR_EMPTY_CHARS = 200
-NEAR_EMPTY_MESSAGE = "text layer too short to assess — a parser sees nothing"
+
+# The near-empty threshold and message are tools.verify_pdf's, not this
+# module's — a resume's text layer either has enough text to be readable
+# or it doesn't, and that call has to be the same call in both tools. A
+# document that passed verify_pdf but failed ats_check's own duplicate
+# threshold (or vice versa) would be a contradiction with no owner.
 
 # Common Unicode punctuation a clean document layer legitimately uses,
 # plus the fi/fl ligature codepoints — Typst's Libertinus fonts can
