@@ -168,3 +168,31 @@ def move_row(text: str, company: str, role: str, from_section: str,
         insert_after_idx -= 1
     lines.insert(insert_after_idx + 1, new_line)
     return _join(lines, trailing_newline)
+
+
+def touch_row(text: str, section: str, company: str, role: str,
+              column: str, value) -> str:
+    """Update one cell in one row (same Company+Role match rules as
+    move_row), preserving every other cell byte-for-byte — including
+    whatever uneven spacing, markdown, or annotation that OTHER cell
+    already carried. Splices the raw line at the unescaped-pipe boundaries
+    around just the target cell rather than rebuilding the line from
+    parsed (whitespace-stripped) values, which is what makes the
+    untouched cells exact rather than merely equivalent."""
+    key = _normalize_section_key(section)
+    sections = parse_tracker(text)
+    table = _require_section(sections, key)
+    _require_known_keys([column], table.headers, key)
+
+    matched = _find_one_match(table.rows, company, role, key)
+    col_idx = next(i for i, h in enumerate(table.headers)
+                   if h.lower() == column.lower())
+
+    lines, trailing_newline = _splitlines_and_trailing_newline(text)
+    old_line = lines[matched.line - 1]
+    pipes = [m.start() for m in _UNESCAPED_PIPE_POS.finditer(old_line)]
+    new_cell = " " + _escape_cell(value) + " "
+    new_line = (old_line[: pipes[col_idx] + 1] + new_cell
+                + old_line[pipes[col_idx + 1]:])
+    lines[matched.line - 1] = new_line
+    return _join(lines, trailing_newline)
