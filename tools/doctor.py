@@ -160,6 +160,27 @@ def _check_config(config_dir: Path, error: "str | None") -> CheckResult:
     return CheckResult("config", False, error, _CONFIG_FIX)
 
 
+def _check_profile(config_dir: Path, config_error: "str | None") -> CheckResult:
+    if config_error is not None:
+        return CheckResult(
+            "profile", "skip",
+            "config didn't load — see the 'config' check above", "")
+
+    profile_path = config_dir / "profile.md"
+    if not profile_path.exists():
+        return CheckResult(
+            "profile", False, f"{profile_path} does not exist",
+            "cp config.example/profile.md config/profile.md")
+
+    violations = check_profile(profile_path.read_text())
+    if violations:
+        return CheckResult(
+            "profile", False, "; ".join(violations),
+            f"edit {profile_path} to add what's missing")
+
+    return CheckResult("profile", True, f"{profile_path} has the required shape", "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -177,4 +198,5 @@ def run_checks(repo_root, config_dir) -> list:
         _check_jobspy(),
         _check_typst(),
         _check_config(config_dir, config_error),
+        _check_profile(config_dir, config_error),
     ]
