@@ -6,8 +6,9 @@ argument-hint: (nothing — the interview starts from wherever the machine alrea
 # /setup
 
 Turn a fresh clone into a configured one. This command interviews the human about the search
-they are actually running and writes the answers into `config/` — the five YAML/txt files the
-engine reads, plus the `profile.md` claim ledger the drafting side reads.
+they are actually running and writes the answers into `config/` — six files in all: four YAML
+files and `exclusions.txt` for the engine, plus the `profile.md` claim ledger the drafting side
+reads.
 
 `$ARGUMENTS` is ignored. There is nothing to pass; the interview starts from whatever state
 the machine is already in, which Step 1 establishes rather than assumes.
