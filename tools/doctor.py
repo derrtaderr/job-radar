@@ -181,6 +181,28 @@ def _check_profile(config_dir: Path, config_error: "str | None") -> CheckResult:
     return CheckResult("profile", True, f"{profile_path} has the required shape", "")
 
 
+_HOOKS_PATH_FIX = "git config core.hooksPath .githooks"
+
+
+def _check_privacy_hook(repo_root: Path) -> CheckResult:
+    # Read-only: `git config --get` never writes. The doctor's job is to
+    # report the fix, never to run it.
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "config", "--get", "core.hooksPath"],
+        capture_output=True, text=True)
+    hooks_path = result.stdout.strip()
+
+    if result.returncode != 0 or not hooks_path:
+        return CheckResult(
+            "privacy hook", False, "core.hooksPath is not set", _HOOKS_PATH_FIX)
+    if hooks_path != ".githooks":
+        return CheckResult(
+            "privacy hook", False,
+            f"core.hooksPath is {hooks_path!r}, expected '.githooks'",
+            _HOOKS_PATH_FIX)
+    return CheckResult("privacy hook", True, "core.hooksPath is .githooks", "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -199,4 +221,5 @@ def run_checks(repo_root, config_dir) -> list:
         _check_typst(),
         _check_config(config_dir, config_error),
         _check_profile(config_dir, config_error),
+        _check_privacy_hook(repo_root),
     ]

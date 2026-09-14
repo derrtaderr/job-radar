@@ -209,3 +209,37 @@ def test_profile_fails_and_names_violations_when_malformed(tmp_path):
     result = _result(results, "profile")
     assert result.ok is False
     assert "missing keys" in result.detail
+
+
+# --- check 6: privacy hook active (git config core.hooksPath, read-only) ----
+
+def test_hook_ok_when_hookspath_set_to_githooks(tmp_path):
+    repo = _git_repo(tmp_path, hooks_path=".githooks")
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "privacy hook")
+    assert result.ok is True
+
+
+def test_hook_fails_with_exact_set_command_when_unset(tmp_path):
+    repo = _git_repo(tmp_path, hooks_path=None)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "privacy hook")
+    assert result.ok is False
+    assert result.fix == "git config core.hooksPath .githooks"
+
+
+def test_hook_fails_when_set_to_something_else(tmp_path):
+    repo = _git_repo(tmp_path, hooks_path="some/other/dir")
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "privacy hook")
+    assert result.ok is False
+    assert "some/other/dir" in result.detail
+
+
+def test_hook_check_never_writes_git_config(tmp_path):
+    repo = _git_repo(tmp_path, hooks_path=None)
+    doctor.run_checks(repo, _config_dir(tmp_path))
+    result = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=repo, capture_output=True, text=True)
+    assert result.returncode != 0  # still unset — doctor never set it
