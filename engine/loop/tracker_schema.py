@@ -227,12 +227,19 @@ def tracker_check(text: str) -> list:
                 violations.append(
                     f"line {row.line}: row has {row.raw_cell_count} cells, "
                     f"header has {n_headers} ({title} section)")
-                # A wrong cell count means every column past the break point
-                # is misaligned — a value under "Date closed" may actually be
-                # what belongs in "Reason". Checking those columns anyway
-                # would report a symptom of this same bug as a second,
-                # unrelated violation, which is noise, not signal.
-                continue
+                if row.raw_cell_count < n_headers:
+                    # Too FEW cells means every column past the break point
+                    # is misaligned — a value under "Date closed" may
+                    # actually be what belongs in "Reason". Checking those
+                    # columns anyway would report a symptom of this same bug
+                    # as a second, unrelated violation, which is noise, not
+                    # signal.
+                    continue
+                # Too MANY cells is different: the leading cells still line
+                # up with the headers (parse_tracker built the Row from
+                # exactly those, dropping only the excess), so the ISO-date
+                # and duplicate checks below still apply to them — only the
+                # unpositioned trailing cell(s) are lost.
 
             for column in date_columns:
                 cell = (row.get(column) or "").strip()
