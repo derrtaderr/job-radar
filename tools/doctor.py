@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -130,6 +131,15 @@ def _check_jobspy() -> CheckResult:
         "pip install python-jobspy")
 
 
+def _check_typst() -> CheckResult:
+    if shutil.which("typst") is not None:
+        return CheckResult("typst", True, "typst on PATH", "")
+    return CheckResult(
+        "typst", "warn",
+        "typst not on PATH — drafting (resume/cover-letter compile) needs it",
+        "brew install typst")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
@@ -144,4 +154,5 @@ def run_checks(repo_root, config_dir) -> list:
         _check_python_version(),
         _check_venv_and_required_packages(repo_root),
         _check_jobspy(),
+        _check_typst(),
     ]

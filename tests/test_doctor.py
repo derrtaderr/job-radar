@@ -123,3 +123,22 @@ def test_jobspy_absent_warns_not_fails(tmp_path, monkeypatch):
     result = _result(results, "jobspy")
     assert result.ok == "warn"
     assert result.status == "WARN"
+
+
+# --- check 3: typst on PATH (WARN) -------------------------------------------
+
+def test_typst_present_is_ok(tmp_path, monkeypatch):
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: "/opt/homebrew/bin/typst")
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "typst")
+    assert result.ok is True
+
+
+def test_typst_absent_warns_with_brew_fix(tmp_path, monkeypatch):
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "typst")
+    assert result.ok == "warn"
+    assert result.fix == "brew install typst"
