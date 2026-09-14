@@ -11,6 +11,27 @@ def test_catches_phone():
     assert scan_text("call 555-867-5309 today", []) != []
 
 
+def test_catches_phone_bare():
+    # p1 — bare phone, no surrounding punctuation.
+    assert scan_text("call 512-448-9921 for details", []) != []
+
+
+def test_catches_phone_sentence_final_parens():
+    # p2 — sentence-final: a trailing period is punctuation, not a version
+    # dot, and must not suppress the match.
+    assert scan_text("reach me at (512) 448-9921.", []) != []
+
+
+def test_catches_phone_mid_sentence():
+    # p3 — mid-sentence, phone followed by more words.
+    assert scan_text("my number 512-448-9921 works anytime", []) != []
+
+
+def test_catches_phone_dashed_sentence_final():
+    # p4 — dashed form, sentence-final period.
+    assert scan_text("call 512-448-9921.", []) != []
+
+
 def test_catches_denylist_entry_case_insensitive():
     assert scan_text("built at ACME Corp", ["acme corp"]) != []
 
