@@ -42,3 +42,17 @@ def test_body_location_parses():
     assert body_location("the role is based in San Francisco.") == "San Francisco"
     assert body_location("our office in Austin is home base") == "Austin"
     assert body_location("we ship data based in reality") is None
+
+
+def test_body_location_verb_is_case_insensitive_at_sentence_start():
+    # "Based in Chicago, IL." (sentence-initial capital) must match just like
+    # "based in Chicago" does — but the city capture itself stays
+    # case-sensitive, so a lowercase non-city word after the verb still can't
+    # produce a false match.
+    assert body_location("Based in San Francisco.") == "San Francisco"
+    assert body_location("we ship data based in reality") is None
+
+
+def test_sentence_initial_based_kills_location():
+    row = make_row(is_remote=False, location="", description="Based in Chicago, IL.")
+    assert "location" in _names(row)
