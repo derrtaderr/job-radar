@@ -13,6 +13,8 @@ This is NOT a way to run your own search, and it never touches one:
   same calibration report every time it runs, on any machine, on any date.
 - It sends nothing and edits nothing. Every byte it writes lands under
   `--out`.
+- Re-running reuses the same directory; the demo refuses to clear a
+  directory it didn't create.
 
 What it runs, in order:
 
@@ -110,6 +112,19 @@ NEVER_SENDS_LINE = (
     "Nothing here sends anything or edits any config — the demo reads "
     "config.example and writes only into its --out directory.")
 
+# Written into --out the moment this script decides the directory is safe to
+# use — before any other artifact — and checked on every later run. Its
+# presence is the ONLY thing that licenses clearing a non-empty --out; see
+# _reset_out_dir. Deliberately excluded from the closing summary's artifact
+# list (below) — it's internal bookkeeping this script reads back, not a
+# deliverable a person would open.
+DEMO_SENTINEL = ".job-radar-demo"
+_SENTINEL_CONTENTS = (
+    "This file marks a directory as tools/demo.py's own output. Its "
+    "presence is what lets a later `python tools/demo.py --out <this dir>` "
+    "clear and rewrite this directory instead of refusing. Safe to delete "
+    "along with the rest of this directory.\n")
+
 
 def _parse(argv):
     parser = argparse.ArgumentParser(
@@ -120,16 +135,39 @@ def _parse(argv):
     return parser.parse_args(argv)
 
 
-def _reset_out_dir(out_dir: Path) -> None:
-    """Start clean every run. write_report APPENDS to an existing same-day
+def _reset_out_dir(out_dir: Path) -> "tuple[bool, str]":
+    """Start clean every run — but never at the cost of destroying something
+    the demo didn't put there. write_report APPENDS to an existing same-day
     queue.md by design (a real second run shouldn't destroy the first run's
     queue) — but that means a demo rerun into the SAME directory would grow
-    the file on every invocation instead of reproducing it. The demo isn't a
-    real search with something to preserve, so it clears its own output
-    directory first instead of relying on that append behavior."""
-    if out_dir.exists():
+    the file on every invocation instead of reproducing it, so this clears
+    --out before writing anything new. Clearing is safe in exactly three
+    cases, and refuses in every other one:
+
+      (a) --out doesn't exist yet — nothing to lose, just create it.
+      (b) --out exists and is empty — nothing to lose.
+      (c) --out exists and carries DEMO_SENTINEL — a prior demo run made
+          this directory, so its contents are the demo's own to replace.
+
+    Anything else (a non-empty directory with no sentinel — a stranger's
+    file, another tool's output, a --out typo pointed at a real directory)
+    is refused outright: nothing is deleted, and the caller gets back a
+    message naming exactly why. Returns (ok, message); message is empty on
+    success.
+    """
+    if not out_dir.exists():
+        out_dir.mkdir(parents=True)
+    elif any(out_dir.iterdir()):
+        if not (out_dir / DEMO_SENTINEL).exists():
+            return False, (
+                f"--out points at {out_dir}, which has contents this demo "
+                "did not create — pick an empty or new directory; nothing "
+                "was deleted")
         shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
+        out_dir.mkdir(parents=True)
+
+    (out_dir / DEMO_SENTINEL).write_text(_SENTINEL_CONTENTS)
+    return True, ""
 
 
 def _run_radar_pass(out_dir: Path) -> tuple:
@@ -233,7 +271,11 @@ def _run_loop_pass(out_dir: Path) -> Path:
 def main(argv=None) -> int:
     args = _parse(argv)
     out_dir = Path(args.out).resolve()
-    _reset_out_dir(out_dir)
+
+    ok, message = _reset_out_dir(out_dir)
+    if not ok:
+        print(f"demo: {message}")
+        return 2
 
     print("=" * 72)
     print("job-radar demo — fictional config.example persona, no network, "
