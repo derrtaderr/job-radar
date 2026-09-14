@@ -1,0 +1,5 @@
+default_resume: stock-resume
+default_cover: stock-cover
+templates:
+  - {name: stock-resume, source: templates/resume.typ, kind: resume, page_limit: 2}
+  - {name: stock-cover,  source: templates/cover.typ,  kind: cover,  page_limit: 1}
