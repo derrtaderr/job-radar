@@ -139,3 +139,76 @@ DUPLICATE_COMPANY_ROLE = """\
 |---|---|---|---|
 | Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
 """
+
+# Closed (and Research) are append-only by design — a company can reasonably
+# apply for the same role months apart (reactivation, a second req). Only
+# Active and Drafted but not applied gate on duplicate Company+Role, because
+# a role can't be live twice AT ONCE. Orchestrator ruling, 2026-09-13.
+DUPLICATE_IN_CLOSED_ALLOWED = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | 2026-09-10 |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Crux | GTM Engineer | 2026-05-27 | No-fit (role pivoted) |
+| Crux | GTM Engineer | 2026-09-02 | Closed-lapsed (own action) |
+"""
+
+DUPLICATE_IN_DRAFTED_STILL_FLAGGED = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | 2026-09-10 |
+
+## Drafted but not applied
+
+| Company | Role | Comp band |
+|---|---|---|
+| Meridian Analytics | Analytics Engineer | 140-165k |
+| Meridian Analytics | Analytics Engineer | 145-170k |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
+"""
+
+# A cell carrying a literal "|" written as "\|" — what the radar's own report
+# renderer produces — must parse as ONE cell, not split the row in two.
+ESCAPED_PIPE_CELL = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Growth \\| Ops Engineer | 2026-09-10 |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
+"""
+
+# One more cell than the header count — the overflow cell must be dropped
+# from the Row (not silently attached under a made-up key), and the mismatch
+# must still be reported by line, same as the too-FEW-cells case.
+MORE_CELLS_THAN_HEADERS = """\
+## Active
+
+| Company | Role | Last touch |
+|---|---|---|
+| Cobalt Grid | Data Platform Engineer | 2026-09-10 | Extra cell |
+
+## Closed
+
+| Company | Role | Date closed | Outcome |
+|---|---|---|---|
+| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |
+"""

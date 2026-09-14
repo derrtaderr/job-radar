@@ -9,10 +9,14 @@ from tests.fixtures_tracker import (
     BAD_ISO_DATE_CLOSED,
     CELL_COUNT_MISMATCH,
     DUPLICATE_COMPANY_ROLE,
+    DUPLICATE_IN_CLOSED_ALLOWED,
+    DUPLICATE_IN_DRAFTED_STILL_FLAGGED,
+    ESCAPED_PIPE_CELL,
     MISSING_ACTIVE_SECTION,
     MISSING_CLOSED_SECTION,
     MISSING_REQUIRED_COLUMN_ACTIVE,
     MISSING_REQUIRED_COLUMN_CLOSED,
+    MORE_CELLS_THAN_HEADERS,
     VALID_TRACKER,
 )
 
@@ -195,3 +199,55 @@ def test_duplicate_across_different_sections_does_not_violate():
         "| Meridian Rows | Data Engineer | 2026-08-20 | Rejected |\n"
     )
     assert tracker_check(text) == []
+
+
+# --- CRITICAL fix: duplicate scope is Active/Drafted only, not Closed/Research ---
+# Orchestrator ruling 2026-09-13: Closed is append-only by design (reapplication
+# cycles months apart legitimately repeat Company+Role — Crux, EZO.io, Tempo on
+# the real tracker); Research allows repeats too. Only Active and Drafted but
+# not applied gate, because a role can't be live twice AT ONCE.
+
+def test_duplicate_company_role_in_closed_is_allowed():
+    assert tracker_check(DUPLICATE_IN_CLOSED_ALLOWED) == []
+
+
+def test_duplicate_company_role_in_drafted_still_flags_both_lines():
+    violations = tracker_check(DUPLICATE_IN_DRAFTED_STILL_FLAGGED)
+    dup = [v for v in violations if "duplicate" in v.lower()]
+    assert len(dup) == 1
+    assert "Meridian Analytics" in dup[0]
+    assert "11" in dup[0] and "12" in dup[0]
+
+
+def test_duplicate_company_role_in_active_still_flags_both_lines():
+    # Regression: Active stays gated after the scope fix.
+    violations = tracker_check(DUPLICATE_COMPANY_ROLE)
+    dup = [v for v in violations if "duplicate" in v.lower()]
+    assert len(dup) == 1
+    assert "5" in dup[0] and "6" in dup[0]
+
+
+# --- IMPORTANT 1: escaped pipes inside a cell must not split the row ---
+
+def test_escaped_pipe_cell_parses_as_one_cell():
+    sections = parse_tracker(ESCAPED_PIPE_CELL)
+    row = sections["active"].rows[0]
+    assert row.raw_cell_count == 3
+    assert row["Role"] == "Growth | Ops Engineer"
+
+
+def test_escaped_pipe_cell_produces_no_violations():
+    assert tracker_check(ESCAPED_PIPE_CELL) == []
+
+
+# --- MINOR: more cells than headers drops the overflow, still flags the row ---
+
+def test_more_cells_than_headers_drops_overflow_and_flags_line():
+    sections = parse_tracker(MORE_CELLS_THAN_HEADERS)
+    row = sections["active"].rows[0]
+    assert row.raw_cell_count == 4
+    assert row["Last touch"] == "2026-09-10"
+    assert row.get("Extra cell") is None  # no fourth header to key it under
+
+    violations = tracker_check(MORE_CELLS_THAN_HEADERS)
+    assert any("line 5" in v and "4 cells" in v and "3" in v for v in violations)
