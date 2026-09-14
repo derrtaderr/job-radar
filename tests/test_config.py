@@ -244,3 +244,51 @@ def test_archive_dir_non_string_rejected(tmp_path):
     (tmp_path / "exclusions.txt").write_text("")
     with pytest.raises(ConfigError, match="archive_dir"):
         load_config(tmp_path)
+
+
+# --- archive_dir: '' means absent, same as tracker: '' ----------------------
+
+def test_empty_archive_dir_falls_back_to_the_default(tmp_path):
+    # `tracker: ''` already resolves to "no tracker" via `or None`. An empty
+    # archive_dir went the other way: it is a str, so it passed the type
+    # guard and resolved to the CONFIG'S PARENT directory — making the whole
+    # repo root the archive, where every sibling folder reads as an archived
+    # application.
+    from engine.radar.config import load_config
+    cfg_dir = _copy_example(tmp_path)
+    settings = (cfg_dir / "settings.yaml")
+    settings.write_text(settings.read_text() + "\narchive_dir: ''\n")
+
+    cfg = load_config(cfg_dir)
+
+    assert cfg.archive_dir == (cfg_dir.parent / "archive").resolve()
+
+
+def test_whitespace_only_archive_dir_also_falls_back(tmp_path):
+    from engine.radar.config import load_config
+    cfg_dir = _copy_example(tmp_path)
+    settings = (cfg_dir / "settings.yaml")
+    settings.write_text(settings.read_text() + "\narchive_dir: '   '\n")
+
+    cfg = load_config(cfg_dir)
+
+    assert cfg.archive_dir == (cfg_dir.parent / "archive").resolve()
+
+
+def test_a_real_archive_dir_is_still_honored(tmp_path):
+    from engine.radar.config import load_config
+    cfg_dir = _copy_example(tmp_path)
+    settings = (cfg_dir / "settings.yaml")
+    settings.write_text(settings.read_text() + "\narchive_dir: ./filed\n")
+
+    cfg = load_config(cfg_dir)
+
+    assert cfg.archive_dir == (cfg_dir.parent / "filed").resolve()
+
+
+def _copy_example(tmp_path):
+    """A writable copy of config.example under tmp_path/config."""
+    import shutil
+    cfg_dir = tmp_path / "config"
+    shutil.copytree(EXAMPLE, cfg_dir)
+    return cfg_dir

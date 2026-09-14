@@ -11,6 +11,7 @@ changes; what must never change is which OTHER lines moved.
 All fixtures are synthetic (fictional companies, real column-header shape).
 """
 import difflib
+import pytest
 
 from engine.loop.tracker_edit import TrackerEditError, add_row, move_row, touch_row
 from engine.loop.tracker_schema import parse_tracker
@@ -469,3 +470,70 @@ def test_touch_last_column_preserves_a_trailing_pipe_when_there_is_one(tmp_path)
     out = touch_row(text, "Active", "Cobalt Grid", "Data Engineer",
                     "Last touch", "2026-09-13")
     assert "| Cobalt Grid | Data Engineer | 2026-09-13 |" in out
+
+
+# --- add_row must not create a row move/touch can never find again ----------
+# `add` builds its row from --set values alone, with no source row to inherit
+# Company and Role from. A row with both cells empty passes `check` (which
+# only requires the COLUMNS to exist) and is then unreachable forever: every
+# later move/touch matches on Company+Role. The loop docs already tell the
+# operator to set both; this is the tool-level backstop behind that advice.
+
+_MIN_TRACKER = (
+    "## Active\n\n"
+    "| Company | Role | Stage | Last touch |\n"
+    "|---|---|---|---|\n"
+    "| Cobalt Grid | Data Engineer | Applied | 2026-09-10 |\n\n"
+    "## Drafted but not applied\n\n"
+    "| Company | Role | Next step |\n"
+    "|---|---|---|\n"
+    "| Meridian Analytics | Analytics Engineer | Finish cover |\n\n"
+    "## Closed\n\n"
+    "| Company | Role | Date closed | Outcome |\n"
+    "|---|---|---|---|\n"
+    "| Northwind Analytics | Data Engineer | 2026-07-15 | Withdrew |\n")
+
+
+def test_add_row_refuses_a_missing_company_in_active():
+    from engine.loop.tracker_edit import TrackerEditError, add_row
+    with pytest.raises(TrackerEditError, match="Company"):
+        add_row(_MIN_TRACKER, "Active", {"Role": "Data Engineer",
+                                         "Stage": "Applied"})
+
+
+def test_add_row_refuses_a_missing_role_in_active():
+    from engine.loop.tracker_edit import TrackerEditError, add_row
+    with pytest.raises(TrackerEditError, match="Role"):
+        add_row(_MIN_TRACKER, "Active", {"Company": "Tessellate",
+                                         "Stage": "Applied"})
+
+
+def test_add_row_refuses_a_blank_company_in_active():
+    # Present-but-empty is the same unreachable row as absent.
+    from engine.loop.tracker_edit import TrackerEditError, add_row
+    with pytest.raises(TrackerEditError, match="Company"):
+        add_row(_MIN_TRACKER, "Active", {"Company": "   ",
+                                         "Role": "Data Engineer"})
+
+
+def test_add_row_refuses_a_missing_company_in_drafted():
+    from engine.loop.tracker_edit import TrackerEditError, add_row
+    with pytest.raises(TrackerEditError, match="Company"):
+        add_row(_MIN_TRACKER, "Drafted but not applied",
+                {"Role": "Analytics Engineer"})
+
+
+def test_add_row_accepts_both_cells_populated():
+    from engine.loop.tracker_edit import add_row
+    out = add_row(_MIN_TRACKER, "Active",
+                  {"Company": "Tessellate", "Role": "Data Engineer",
+                   "Stage": "Applied", "Last touch": "2026-09-13"})
+    assert "| Tessellate | Data Engineer | Applied | 2026-09-13 |" in out
+
+
+def test_add_row_does_not_gate_sections_without_those_columns():
+    # The rule protects rows that must stay findable by Company+Role. A table
+    # that has no such columns is not that shape and must not be blocked.
+    from engine.loop.tracker_edit import add_row
+    text = ("## Active\n\n| Note |\n|---|\n| something |\n")
+    assert "| later |" in add_row(text, "Active", {"Note": "later"})
