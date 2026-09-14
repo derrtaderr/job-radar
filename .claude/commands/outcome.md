@@ -14,9 +14,14 @@ rejected, final round, they went with an internal candidate."
 
 Everything this command writes lands in two places and only two: the tracker markdown file,
 and the archived application's `outcome.md`. Both are the human's own record of their own
-search, which is why every edit here is printed as a diff before it is written, and why none
-of it is inferred from a date, a heuristic, or an assumption about what probably happened
-next.
+search, so nothing here is inferred from a date, a heuristic, or an assumption about what
+probably happened next.
+
+**The two write paths report differently, and it is worth knowing which you are looking at.**
+Every `tracker_cli.py` edit prints a unified diff of the change before writing, so the tracker
+edits carry their own receipt. The archive writes — `archive_application` and `append_log` —
+print no diff; they are silent appends to a file nobody else is editing. So quote the log line
+you wrote in the presentation, because nothing else will show it.
 
 **Every command in this file runs from the repo root, using `.venv/bin/python`.** Paths are
 repo-relative throughout.
@@ -72,28 +77,86 @@ running anything:
 | What happened | Transition | Sections |
 |---|---|---|
 | The human applied | archive, then move | Drafted but not applied → Active |
-| A stage moved, or anyone made contact | touch + log, row stays put | Active |
+| A stage moved, or anyone made contact | log + touch, row stays put | Active |
 | It ended, any way at all | move | Active → Closed |
 
-Two things to settle here rather than later.
+Three things to settle here rather than later.
 
-**The row may not be where you expect.** `move` matches exactly one row by Company+Role in
-the `--from` section and refuses otherwise, by design:
+### Resolve the archive slug by listing, never by construction
+
+Several steps below need `<archive_dir>/<slug>`. **List the archive and match against what is
+actually there.** Do not build the path out of the company name, and do not assume it matches
+the apply-out folder you have in mind:
+
+```bash
+ls <archive_dir>
+```
+
+```bash
+.venv/bin/python -c "
+from pathlib import Path
+from engine.loop.archive import read_outcome, ArchiveError
+for slug in sorted(p for p in Path('<archive_dir>').iterdir() if p.is_dir()):
+    try:
+        o = read_outcome(slug)
+        print(f'{slug.name}  |  {o[\"company\"]}  |  {o[\"role\"]}  |  applied {o[\"applied\"]}  |  followups {o[\"followups\"]}')
+    except (ArchiveError, OSError) as e:
+        print(f'{slug.name}  |  UNREADABLE: {e}')
+"
+```
+
+Match on the `company` and `role` in the frontmatter, which are the values a human typed, not
+on the slug's spelling. A constructed path is how you end up writing a log line into a
+directory that does not exist, or silently creating one. If nothing matches, the application
+was never archived — that is Step 3d, not a naming problem to solve by trying variants.
+
+### The row may not be where you expect
+
+`move` matches exactly one row by Company+Role in the `--from` section and refuses otherwise,
+by design:
 
 ```
 error: no row found for 'Nope Inc' / 'Engineer' in Active section
 ```
 
-That is information, not a failure to work around. An application made straight off a
-posting never passed through "Drafted but not applied," so there is nothing to move — use
-`tracker_cli.py add --section Active` instead, with the same columns Step 3a would have set.
-Never invent a `--from` section to make a `move` succeed.
+That is information, not a failure to work around. An application made straight off a posting
+never passed through "Drafted but not applied," so there is nothing to move. **Add the row
+instead.** `add` builds the row from the `--set` values alone — it has no source row to
+inherit Company and Role from, and it will happily write a row with both cells empty, which
+`check` passes (it only requires the COLUMNS to exist) and which `move` and `touch` can then
+never match again. So set them explicitly, first:
 
-**`hired`, `offer`, and `offer declined` get recorded only on the human's explicit word.**
-An offer is not inferable from a final round going well, and "they said they'd be in touch
-with good news" is not an offer. If the arguments are ambiguous about which of those
-happened, ask. This is the one place where a wrong guess is written into a permanent record
-and later read back by a calibration run as though it were fact.
+```bash
+.venv/bin/python tools/tracker_cli.py add <tracker path> \
+  --section 'Active' \
+  --set 'Company=<Company>' \
+  --set 'Role=<Role>' \
+  --set 'Stage=Applied' \
+  --set 'Last touch=<YYYY-MM-DD>' \
+  --set 'Next step=Wait for response' \
+  --dry-run
+```
+
+Read the diff before writing, and confirm Company and Role are both populated in the new line.
+Any column the human's Active table has and this list doesn't gets an empty cell, which is
+fine for `Source` or `Notes` and is not fine for those two. Never invent a `--from` section to
+make a `move` succeed.
+
+### Offers and hires are recorded only on the human's explicit word
+
+**`hired`, `offer`, and `offer declined` get recorded only on the human's explicit word.** An
+offer is not inferable from a final round going well, and "they said they'd be in touch with
+good news" is not an offer. If the arguments are ambiguous about which of those happened, ask.
+This is the one place where a wrong guess is written into a permanent record and later read
+back by a calibration run as though it were fact.
+
+**For a hire, write `Outcome=Offer accepted`** and put the detail in `Reason`. It reads
+plainly, and it classifies as an offer, because `calibrate.py` matches `offer` first. Avoid
+`Hired` on its own: it matches nothing in the mapping table and lands in the `other` bucket.
+That is not a bug and nothing is lost — `other` prints the exact text in the report and is
+excluded from every contrast, which is the right treatment for a word nobody has interpreted.
+It just means the one outcome the whole search was for sits outside the analysis. If the human
+prefers `Hired`, use their word and say this out loud rather than overriding them.
 
 ## Step 3a — Applied
 
@@ -140,10 +203,24 @@ followups: 0
 ArchiveError: archive slug 'cobalt-grid-data-platform-engineer' already exists at ...
 ```
 
-Which almost always means this application was already archived — check the existing
-`outcome.md` before doing anything else. If it is genuinely a second application to the same
-company and role months apart, the fix is a distinct apply-out folder name, never deleting
-the first archive.
+**This means the application was genuinely already archived.** It is not a leftover from a
+half-finished attempt — `archive_application` stages the whole copy in a temporary directory
+and renames it into place only after the last file lands, so a failed archive leaves nothing
+behind and the retry path is always clear. Read the existing `outcome.md` (its Log will say
+when it was applied) and carry on from there; the tracker move below may still be outstanding.
+If it is genuinely a second application to the same company and role months apart, give the
+new one a distinct apply-out folder name. Never delete the existing archive to make room.
+
+**If the apply-out folder is gone, the archive cannot be created faithfully:**
+
+```
+ArchiveError: nothing to archive: apply-out/cobalt-grid-data-platform-engineer does not exist ...
+```
+
+Do not rebuild it. Re-drafting from the current `config/profile.md` produces a resume that
+was never sent, filed as though it were, and a follow-up drafted off it months later would
+quote claims the employer never received. Take the no-archive path in **Step 3d** instead:
+record the tracker side, say plainly that no archive exists, and move on.
 
 Then move the row. Active carries columns Drafted doesn't, so they come in through `--set`:
 
@@ -171,17 +248,40 @@ refused, naming it:
 error: unknown column(s) for Active section: Stag
 ```
 
+### Committing a `--dry-run`
+
+`--dry-run` prints the diff and writes nothing. **Show the human that diff, and on their yes,
+re-run the identical command with `--dry-run` removed and nothing else changed.** Not a
+rebuilt command, not a tidied one — the diff they approved is only a promise about the exact
+argument list that produced it. Then show the second diff too; it is the receipt that the
+write happened, and it should match what they just approved.
+
+Which edits get gated this way, and why it is not all of them:
+
+- **`move` is always gated.** It rewrites a whole row across two tables, drops source-only
+  columns, and carries values you composed (`Next step`, a `Reason` clause). The blast radius
+  is a row, and the diff is the only place a wrong `--set` is visible before it lands.
+- **`add` is always gated**, for the reason in Step 2: it can write a row with empty
+  Company/Role that nothing can match again.
+- **`touch` is not gated by default.** One cell, one value, and in almost every case the value
+  came verbatim from the human ("they replied today"). Gating it turns a one-line update into
+  a two-step ceremony, and a gate that re-asks an answered question trains people to skim
+  past the ones that matter. The tool prints the diff on the real run regardless, so the
+  receipt is there either way. Gate a `touch` when the value is one you inferred rather than
+  one they said — a date reconstructed from "last week," or a `Stage` you named for them.
+
 ## Step 3b — A stage moved, or anyone made contact
 
 The row stays in Active. Two writes, and they are not redundant — the tracker cell is what
 the staleness scan reads, and the archive log is what a calibration run and a follow-up draft
 read months later.
 
-```bash
-.venv/bin/python tools/tracker_cli.py touch <tracker path> \
-  --section 'Active' --company '<Company>' --role '<Role>' \
-  --column 'Last touch' --value '<YYYY-MM-DD>'
-```
+**Log first, then touch the tracker**, which is the same argument as Step 3a's archive-first
+rule applied one step down. A log line with a `Last touch` that hasn't moved yet leaves the
+row looking a day staler than it is, so the next scan surfaces it and the gap is one command
+away from closing. A moved `Last touch` with no log line behind it is the opposite: the row
+drops out of every scan, looking exactly like a row that is fine, while the thing that was
+actually said is gone.
 
 ```bash
 .venv/bin/python -c "
@@ -192,15 +292,25 @@ append_log(Path('<archive_dir>/<slug>'), '<YYYY-MM-DD>',
 "
 ```
 
-`touch` rewrites exactly one cell and leaves every other cell in the line byte-for-byte
-intact, annotations and spacing included. `append_log` adds one dated line and disturbs
-nothing above it. Log what was said, in the human's words, short: `screen scheduled`,
+```bash
+.venv/bin/python tools/tracker_cli.py touch <tracker path> \
+  --section 'Active' --company '<Company>' --role '<Role>' \
+  --column 'Last touch' --value '<YYYY-MM-DD>'
+```
+
+`append_log` adds one dated line and disturbs nothing above it, silently — it prints no diff,
+so quote the line you wrote when you present. `touch` rewrites exactly one cell and leaves
+every other cell in the line byte-for-byte intact, annotations and spacing included, and it
+does print a diff. Log what was said, in the human's words, short: `screen scheduled`,
 `recruiter asked for references`, `take-home sent, due Friday`. A log line is evidence for a
 follow-up draft later, so a vague one is worth less than none.
 
 Also `touch` the `Stage` and `Next step` columns when they changed. A tracker whose Stage
 still says `Applied` through an HM round is one the human stops trusting, and it is the same
 one command.
+
+If the slug lookup from Step 2 found no archive, skip the `append_log` and still do the
+`touch` — that is Step 3d.
 
 ### Offer a thank-you note, in the same turn
 
@@ -250,8 +360,8 @@ that reads as wisdom and carries none. If they don't have one, `--set 'Carry-for
 lesson='` and leave it empty. An empty cell is honest; an invented one is noise that outlives
 the application.
 
-Then log the close in the archive too, so the outcome sits with the materials that produced
-it:
+Log the close in the archive first, same ordering and same reason as Step 3b, so the outcome
+sits with the materials that produced it:
 
 ```bash
 .venv/bin/python -c "
@@ -261,6 +371,41 @@ append_log(Path('<archive_dir>/<slug>'), '<YYYY-MM-DD>',
            'closed — rejected after the final round')
 "
 ```
+
+Then run the `move` above with `--dry-run`, show the diff, and **on the human's yes re-run the
+identical command without `--dry-run`.** A close is the most gated edit in this command: it
+carries a `Reason` clause you composed and a lesson in their words, and it is the row a
+calibration run reads back as fact months later.
+
+## Step 3d — When there is no archive
+
+The slug lookup in Step 2 found nothing. The realistic cause is an application that predates
+this part of the tool — applied by hand, or applied before `/outcome` existed — and it will be
+common for a while. It is not an error and it does not block anything.
+
+**Do the tracker edit exactly as written.** Every transition above works without an archive;
+the tracker is the load-bearing record and it stays complete.
+
+**Skip the `append_log` and say so in the presentation.** One line, naming what was skipped:
+
+> No archive for this one, so the log line was skipped. The tracker row is updated.
+
+Say it every time rather than only the first, because a silently-skipped write is
+indistinguishable from one that happened.
+
+**Never back-fill an archive from an apply-out folder.** Not from a folder still sitting there
+with a matching name, and not by re-drafting. An `apply-out/` folder is overwritten by the next
+drafting run for that company, so a folder that looks right may hold a later draft, or a
+different role's, and neither is what was submitted. An archive's whole value is that it holds
+the documents the employer actually received — a follow-up drafted from it quotes them, and a
+calibration run reads its `jd.md` as the posting that was applied to. A plausible
+reconstruction filed as a record is worse than no record, because nothing downstream can tell
+the difference.
+
+What that costs is worth naming plainly: this application will not appear in `calibrate.py`'s
+joined set, and it is counted in the report's unjoined rows. That is the honest outcome, and
+the report is built to say so out loud rather than quietly shrinking its own denominator.
+`/followup` will decline to draft for it for the same reason.
 
 ## Step 4 — After a close, suggest a calibration run
 
@@ -289,14 +434,18 @@ not a broken run.
 
 Hand back:
 
-1. **The diff** the tool printed, for every edit made. That is the receipt. If anything ran
-   with `--dry-run`, say clearly that nothing was written yet and ask for the yes.
-2. **What was recorded, in one line** — the transition, the row, the archive path if one was
-   written.
-3. **Anything that needs the human**: a tracker violation from Step 1, a missing
+1. **The diff** `tracker_cli.py` printed, for every tracker edit made. That is the receipt for
+   that half. If anything ran with `--dry-run`, say clearly that nothing was written yet and
+   ask for the yes.
+2. **The archive writes, quoted**, because they print no diff and nothing else will show them:
+   the archive path `archive_application` returned, and the exact log line `append_log` added.
+   An unquoted silent append is a write the human has no way to check.
+3. **What was recorded, in one line** — the transition and the row.
+4. **Anything that needs the human**: a tracker violation from Step 1, a missing
    carry-forward lesson, an ambiguity about whether an offer actually happened, an
-   `ArchiveError` on a slug that already exists.
-4. **The thank-you draft** (Step 3b) or **the calibrate suggestion** (Step 4), when either
+   `ArchiveError` on a slug that already exists, or an outcome.md that would not parse.
+5. **A skipped log line** (Step 3d), whenever there was no archive to write to.
+6. **The thank-you draft** (Step 3b) or **the calibrate suggestion** (Step 4), when either
    applies.
 
 Then stop. Nothing here sends an email, replies to a recruiter, or contacts anyone. It
