@@ -13,6 +13,8 @@ considered never gets scored, and never gets recorded as seen.
 """
 from __future__ import annotations
 
+import hashlib
+
 from engine.radar.rules_engine import kill_flags, score, title_passes
 from engine.radar.tracker import tracker_suppresses
 
@@ -42,8 +44,20 @@ def pipeline(raw_rows, state, cfg, tracker_set, today):
     seen_urls, seen_pairs = set(), set()
 
     for r in raw_rows:
-        jid = str(r.get("id") or r.get("job_url"))
-        url = r.get("job_url")
+        rid, url = r.get("id"), r.get("job_url")
+        if rid or url:
+            jid = str(rid or url)
+        else:
+            # No id and no URL: falling back to the literal string "None"
+            # collapses every such row onto one jid, silently merging
+            # distinct postings and — worse — falsely suppressing later ones
+            # on the next run once "None" is in state. Derive a stable
+            # synthetic id from content instead, so distinct postings keep
+            # distinct identities and identical ones still dedupe.
+            company = (r.get("company") or "").lower()
+            title = (r.get("title") or "").lower()
+            digest = hashlib.sha1(f"{company}|{title}".encode()).hexdigest()[:12]
+            jid = f"noid-{digest}"
         if jid in state or (url and url in seen_urls):
             continue
         if excluded(r.get("company"), cfg.exclusions):
