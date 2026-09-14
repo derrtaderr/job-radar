@@ -55,8 +55,10 @@ STOP_WORDS = frozenset({
     # Observed leaking as fake "keywords" on a real JD run — pronouns and
     # determiners the token regex happily matches, plus generic JD nouns
     # that describe the posting rather than the job's actual substance.
+    # "risk" is deliberately NOT here: it is a legitimate domain keyword
+    # in fintech/security/compliance JDs (risk management, credit risk),
+    # and losing it there costs more than the occasional generic leak.
     "that", "who", "what", "every", "new", "hire", "hiring", "teams",
-    "risk",
     # Same class of pronoun/conjunction filler, added alongside them
     # rather than waiting for a second leak to prove the pattern.
     "their", "them", "they", "this", "these", "those", "which", "while",
