@@ -8,6 +8,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: pip install -r requirements-dev.txt
+      - uses: typst-community/setup-typst@v4
+      - run: typst --version
       - run: python tools/privacy_guard.py
       - run: pytest -q
       - name: config smoke test (no network — proves config loads and the pipeline runs on zero rows)
