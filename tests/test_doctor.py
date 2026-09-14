@@ -1,7 +1,11 @@
-"""tools/doctor.py — the environment doctor. Eight independent checks over a
+"""tools/doctor.py — the environment doctor. Nine independent checks over a
 repo + config directory, each returning a CheckResult so one failure never
-hides another. Read-only end to end, including the git config read (check 6)
+hides another. Read-only end to end, including the git config read (check 7)
 — the doctor diagnoses, it never repairs.
+
+The check numbers in the section comments below are positions in
+`run_checks`'s returned list, in order, so a reader can map a comment to the
+line of `doctor.py` output it covers.
 
 Every check here runs against a synthetic repo under tmp_path or a
 monkeypatched piece of the real environment (shutil.which, sys.modules,
@@ -88,7 +92,7 @@ def test_python_version_fails_below_3_11(tmp_path, monkeypatch):
     assert result.fix
 
 
-# --- check 2: venv + required packages + jobspy (WARN) ----------------------
+# --- check 2: venv + required packages -------------------------------------
 
 def test_venv_and_required_packages_ok_when_venv_dir_present_and_importable(tmp_path):
     (tmp_path / ".venv").mkdir()
@@ -116,6 +120,8 @@ def test_missing_required_package_fails_and_names_it(tmp_path, monkeypatch):
     assert "yaml" in result.detail
 
 
+# --- check 3: jobspy importable (WARN) ---------------------------------------
+
 def test_jobspy_present_is_ok(tmp_path, monkeypatch):
     fake_jobspy = type(sys)("jobspy")
     monkeypatch.setitem(sys.modules, "jobspy", fake_jobspy)  # simulate presence
@@ -136,7 +142,7 @@ def test_jobspy_absent_warns_not_fails(tmp_path, monkeypatch):
     assert result.status == "WARN"
 
 
-# --- check 3: typst on PATH (WARN) -------------------------------------------
+# --- check 4: typst on PATH (WARN) -------------------------------------------
 
 def test_typst_present_is_ok(tmp_path, monkeypatch):
     monkeypatch.setattr(doctor.shutil, "which", lambda name: "/opt/homebrew/bin/typst")
@@ -155,7 +161,7 @@ def test_typst_absent_warns_with_brew_fix(tmp_path, monkeypatch):
     assert result.fix == "brew install typst"
 
 
-# --- check 4: config/ exists and load_config succeeds -----------------------
+# --- check 5: config/ exists and load_config succeeds -----------------------
 
 def test_config_ok_when_config_example_copied_verbatim(tmp_path):
     repo = _git_repo(tmp_path)
@@ -183,7 +189,7 @@ def test_config_surfaces_configerror_message_verbatim(tmp_path):
     assert "bad yaml in settings.yaml" in result.detail
 
 
-# --- check 5: profile.md schema (reuses engine.profile_schema) --------------
+# --- check 6: profile.md schema (reuses engine.profile_schema) --------------
 
 def test_profile_ok_when_config_example_copied_verbatim(tmp_path):
     repo = _git_repo(tmp_path)
@@ -194,7 +200,7 @@ def test_profile_ok_when_config_example_copied_verbatim(tmp_path):
 
 def test_profile_skips_when_config_does_not_load_at_all(tmp_path):
     repo = _git_repo(tmp_path)
-    missing_dir = tmp_path / "config"  # never created — check 4 FAILs
+    missing_dir = tmp_path / "config"  # never created — check 5 FAILs
     results = doctor.run_checks(repo, missing_dir)
     result = _result(results, "profile")
     assert result.ok == "skip"
@@ -222,7 +228,7 @@ def test_profile_fails_and_names_violations_when_malformed(tmp_path):
     assert "missing keys" in result.detail
 
 
-# --- check 6: privacy hook active (git config core.hooksPath, read-only) ----
+# --- check 7: privacy hook active (git config core.hooksPath, read-only) ----
 
 def test_hook_ok_when_hookspath_set_to_githooks(tmp_path):
     repo = _git_repo(tmp_path, hooks_path=".githooks")
@@ -256,7 +262,7 @@ def test_hook_check_never_writes_git_config(tmp_path):
     assert result.returncode != 0  # still unset — doctor never set it
 
 
-# --- check 7: gitignore integrity --------------------------------------------
+# --- check 8: gitignore integrity --------------------------------------------
 
 def test_gitignore_ok_when_every_required_line_present(tmp_path):
     repo = _git_repo(tmp_path)  # writes all GITIGNORE_REQUIRED_LINES
@@ -291,7 +297,7 @@ def test_gitignore_fails_when_file_does_not_exist(tmp_path):
     assert result.ok is False
 
 
-# --- check 8: tracker check (only when tracker: is configured) --------------
+# --- check 9: tracker check (only when tracker: is configured) --------------
 
 def test_tracker_skips_when_not_configured(tmp_path):
     # config.example's settings.yaml ships `tracker: null`
@@ -303,7 +309,7 @@ def test_tracker_skips_when_not_configured(tmp_path):
 
 def test_tracker_skips_when_config_does_not_load_at_all(tmp_path):
     repo = _git_repo(tmp_path)
-    missing_dir = tmp_path / "config"  # never created — check 4 FAILs
+    missing_dir = tmp_path / "config"  # never created — check 5 FAILs
     results = doctor.run_checks(repo, missing_dir)
     result = _result(results, "tracker")
     assert result.ok == "skip"
@@ -390,7 +396,7 @@ def test_cli_runs_meaningfully_with_no_config_dir_at_all(tmp_path, capsys):
     exit_code = doctor.main(["--config", str(missing_dir)], repo_root=repo)
 
     out = capsys.readouterr().out
-    assert exit_code == 1  # check 4 FAILs
+    assert exit_code == 1  # check 5 FAILs
     assert "cp -r config.example config" in out
     assert "SKIP" in out  # checks 5 and 8
     # every other check still ran and printed

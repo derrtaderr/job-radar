@@ -107,14 +107,23 @@ against it, report what loads and what does not, and then walk the human through
 interview steps, one file at a time, editing in place and only where they want a change. An
 existing config is a previous version of this same conversation, not a blank slate.
 
+One trap to disarm out loud when that happens. The doctor's `config` check prints
+`fix: cp -r config.example config` under **every** config failure, including a config that
+exists and merely has a bad regex in it. That fix line is written for the empty case. **When
+`config/` exists, do not run it** — read the detail on the FAIL line, which names the file, the
+key, and what was wrong with it, and fix that.
+
 Either way, confirm the config now loads before interviewing anyone:
 
 ```bash
 .venv/bin/python tools/doctor.py
 ```
 
-`config` should read OK. `profile` will still FAIL until Step 3 — the shipped example profile
-passes the schema, but it describes a fictional person, and the interview exists to replace it.
+On a fresh copy both `config` and `profile` read OK — the shipped example profile passes the
+schema. That is worth saying plainly, because it is the most misleading OK in the run: **A green
+doctor never means a correct config. It means a loadable one.** The profile it just approved
+describes a fictional data engineer in Denver, and every value in the other four files is that
+same persona's. Steps 3 through 7 are what make the config true.
 
 ## Step 3 — `profile.md`, the claim ledger
 
@@ -143,7 +152,11 @@ Offer all three, in this order, and let them choose:
    anything outside the folder they named.
 3. **A guided interview.** Slowest, best for someone starting from nothing. Walk role by role,
    newest first: title, employer, dates, then the four or five things they actually did, each
-   with its number. Then skills, education, links.
+   with its number. **Then, for each number, ask the evidence-notes question in the same
+   breath** — what it measured, over what window, and what the honest ceiling on the claim is.
+   Asking it while the story is on the table takes one follow-up; reconstructing it weeks later
+   from a bare bullet usually cannot be done at all, and the claim then either goes out
+   unsupported or gets dropped. Then skills, education, links.
 
 ### Restructuring is not editing
 
@@ -155,10 +168,29 @@ resume, and that length is the entire mechanism.
 **Where a claim's basis is unclear or sounds unverifiable, flag it back to them rather than
 keeping it.** A bullet that says "increased revenue 300%" with no stated denominator, a
 certification with no issuer, a title that does not match the dates around it — surface each
-one, quote it, and ask what actually happened. Two outcomes are fine: they explain it and the
-explanation goes into `## Evidence notes`, or they soften the claim. **Silently keeping a claim
-you doubted is the failure this step exists to prevent** — it survives into a PDF and then into
-a room where someone asks about it.
+one, quote it, and ask what actually happened.
+
+Mark each one in the draft ledger with the same marker `/apply` uses, so there is one flag
+notation across the whole system rather than two:
+
+```
+[CONFIRM: increased revenue 300%]
+```
+
+Three outcomes, all fine:
+
+- **They explain it.** The bullet stays, and the explanation goes into `## Evidence notes` where
+  it can hold the claim up at any length. Marker removed.
+- **They soften it.** The bullet becomes what actually happened. Marker removed.
+- **They keep it as written.** It stays. This is their ledger and their call, and saying so
+  plainly is better than arguing or quietly dropping it. Leave a comment on the line recording
+  that they affirmed it —
+  `<!-- user-affirmed YYYY-MM-DD: kept as stated after review -->` — so the next reader, and
+  `/apply` looking for support behind a bullet, can see it was questioned once and answered.
+
+**Silently keeping a claim you doubted is the failure this step exists to prevent** — it survives
+into a PDF and then into a room where someone asks about it. A marker left unresolved is not
+that failure; an unasked question is.
 
 ### The schema, exactly
 
@@ -201,16 +233,23 @@ Verify before moving on:
 
 ## Step 4 — `queries.yaml`: what to search for
 
-Four questions, and each answer lands in a specific key.
+Five questions, and each answer lands in a specific key.
 
 1. **What titles are you targeting?** Three to five, in the words job boards actually use.
    These become `searches`, one scrape query each.
-2. **Where?** A country, a metro, or "remote". This becomes `location`, passed straight to the
+2. **Which job boards?** This becomes `sites`, passed straight to JobSpy. It supports
+   `linkedin`, `indeed`, `zip_recruiter`, `glassdoor`, `google`, `bayt`, `naukri`, and
+   `bdjobs`. **`[linkedin]` is the shipped default and the one this repo is tested against** —
+   say that, and say the cost of adding more: every site runs every query, so two sites is
+   roughly twice the run time and twice the rate-limiting exposure, and boards differ in how
+   much of a posting body they return, which is what the kill rules read. Adding one is a fine
+   choice made knowingly, and a bad one made by reflex.
+3. **Where?** A country, a metro, or "remote". This becomes `location`, passed straight to the
    board.
-3. **How fresh does a posting have to be to matter?** This becomes `hours_old`. The shipped
+4. **How fresh does a posting have to be to matter?** This becomes `hours_old`. The shipped
    default is 336 (fourteen days). Shorter means fewer, newer postings and more days with an
    empty queue.
-4. **How many results per query?** `results_per_query`, default 25. Higher means a longer queue
+5. **How many results per query?** `results_per_query`, default 25. Higher means a longer queue
    and a longer run.
 
 Then the two patterns, which are where the translation work is.
@@ -225,8 +264,12 @@ title_drop: 'Intern(?:ship)?\b|Manager\b|Director\b|\bVP\b'
 ```
 
 **Never write a pattern into a file the user has not read back in plain English and confirmed.**
-Show both together:
+Show the whole search together — the sites are part of what they are confirming, not a detail
+underneath it:
 
+> Searching **LinkedIn** for Data Engineer, Analytics Engineer, and Data Platform Engineer
+> across the United States, postings from the last 14 days, 25 results per query.
+>
 > `title_keep` — a posting's title has to contain the whole word Data, Analytics, Platform, or
 > Pipeline. "Senior Data Engineer" survives. "Software Engineer" does not.
 >
@@ -236,6 +279,18 @@ Show both together:
 Then ask the question the readback is for: *is that the behavior you want?* Almost always
 something comes back. "Lead should survive but Manager should not." "Staff counts." Edit and
 read back again. Two rounds here saves a week of a queue full of the wrong thing.
+
+### Escape the regex characters in literal names
+
+A title or company the human names in plain English may carry characters a regex reads as
+syntax. `+`, `.`, `*`, `?`, `(`, `)`, `[`, `]`, `|`, `^`, `$`, and `\` all mean something, and
+`&` is safe but often appears beside ones that are not. So a literal `C++` has to be written
+`C\+\+`, and `Node.js` is `Node\.js` unless an any-character match is genuinely wanted.
+
+Getting this wrong fails in both directions. `C++` unescaped is a compile error the loader names
+on the next run. `Node.js` unescaped compiles fine and silently also matches "NodeXjs", which is
+the worse case because nothing reports it. When a name has punctuation in it, escape it and say
+so in the readback.
 
 Check it loads before moving on. A regex that will not compile is caught by name:
 
@@ -257,9 +312,16 @@ a silent wrong answer three weeks later. `comp_floor: 120,000` fails with
 `'comp_floor' in rules.yaml must be an integer, got '120,000'` rather than quietly becoming a
 string. That is a feature of the design, not friction to route around.
 
+One thing about how it reports: **the loader raises on the FIRST problem it hits and stops, so
+one clean-looking doctor run after a fix is not proof the rest is clean.** Re-run the doctor
+after every fix until `config` reads OK, and expect a file with three typos in it to take three
+rounds. Do not batch-guess the remaining two from the shape of the first.
+
 ## Step 5 — `rules.yaml`: the judgment transfer
 
-This is the step the whole command exists for. Three things live here.
+This is the step the whole command exists for. Three things live in `rules.yaml` — the kill
+rules, the comp floor, and the commute region — and one more file, `exclusions.txt`, gets
+written at the end of it, because the question that fills it belongs to this conversation.
 
 ### Kill rules
 
@@ -291,10 +353,16 @@ That last part is the job. Say what the pattern will over-match on, in an exampl
 writing it. Then confirm. A kill rule the human did not knowingly agree to is a posting they
 never see and never learn they missed.
 
-The `reason` field is not decoration. Every kill in the queue prints the rule name, the reason,
-and the line of the posting that matched — which is what makes a kill overrulable instead of
-silent. Write the reason as the sentence they would want to read in three months when a kill
-looks wrong.
+Be exact about where the `reason` shows up, because it is easy to promise too much here. **Every
+kill in the queue prints the rule name and the line of the posting that matched**, struck through
+under a "Killed by rule" heading, which is what makes a kill overrulable instead of silent. **The
+`reason` never renders. It lives in `config/rules.yaml` next to the pattern, which is where you
+trace a kill's why.**
+
+That still makes the field worth writing well, and the human should hear why: a kill in the queue
+gives them a rule name and a quoted line, and the next move is opening `rules.yaml` to decide
+whether the rule was right. The `reason` is the sentence waiting for them there. Write it as what
+they would want to read in three months, not as a label for what the regex does.
 
 Aim for three to six rules out of a first interview. More than that usually means one broad
 answer got split into pieces that will be hard to tune later.
@@ -327,6 +395,37 @@ commute_locations: 'Denver|Boulder'   # '' = remote-only
 
 Read it back: *a non-remote posting is only kept if its location mentions Denver or Boulder;
 every other non-remote posting is killed.* Confirm.
+
+### `exclusions.txt`
+
+The never-agains above were about *kinds* of role. This one is about named employers, and it is
+the natural follow-up question while that frame is still open:
+
+> Any specific companies you never want to see in the queue? Somewhere you already work,
+> somewhere you left, an agency that reposts the same role weekly, a company you have decided
+> against.
+
+One per line, case-insensitive substring match, `#` for comments. It is a separate file because
+it is a list that grows every week and a kill rule is not:
+
+```
+Northwind Analytics
+# reposts the same three roles every week
+Pinecrest Software
+```
+
+Substring is the part to read back. `Acme` also excludes "Acme Robotics" and "Acmetech". Usually
+that is what people want; sometimes it is not, and the fix is writing more of the name.
+
+`exclusions.txt` is one of the five files the loader requires, so it has to exist even if it is
+empty — the shipped copy carries someone else's companies, which is reason enough to open it in
+this interview rather than leave it. If the human has none today, empty it and say that a line
+gets added the first time the queue surfaces something they never want to see again.
+
+**Do not confuse this with Step 8's `.privacy-denylist`, and say the difference out loud, because
+the same company name may well end up in both files for different reasons. `exclusions.txt` is
+suppression; `.privacy-denylist` (Step 8) is privacy.** One keeps a company out of your queue.
+The other keeps a string out of a git commit. Neither does the other's job.
 
 ## Step 6 — `weights.yaml`: offer the defaults, edit only if they care
 
@@ -379,11 +478,25 @@ The defaults are right for almost everyone; three of them are worth a question.
   by pipe position, so a row with the wrong cell count is a row where a later edit lands
   somewhere other than where it looks like it landed.
 
-- *No, make me one* → create a fresh one from the template below.
+- *No, make me one* → three moves, and all three happen now, in one breath.
 
-- *No, and I don't want one* → leave `tracker: null`. The radar runs fine without it; `--check`,
-  `/outcome`, and `/followup` are what need it, and the doctor will SKIP the tracker check rather
-  than fail.
+  **Ask where it goes.** Do not pick silently. Suggest `./config/tracker.md` as the default and
+  say why: `config/` is already gitignored, so a file full of real companies and comp bands is
+  covered by a rule that already exists. Anywhere outside the repo works too, and some people
+  want the tracker in a notes vault they already read daily. Their call, but asked.
+
+  **Write the file** from the template below, at the path they chose.
+
+  **Then set `tracker:` in `settings.yaml` to that path, in the same edit.** This is the half
+  that gets forgotten, and it fails quietly. **Writing the file and leaving `tracker: null` wires
+  nothing, and the doctor SKIPs the tracker check rather than failing it — so a tracker nothing
+  reads looks exactly like a clean run.** Then confirm both ends: the doctor's tracker line
+  should read OK against the new file, not SKIP.
+
+- *No, and I don't want one* → leave `tracker: null`, deliberately. The radar runs fine without
+  it; `--check`, `/outcome`, and `/followup` are what need it, and the doctor SKIPs the tracker
+  check rather than failing. Say that this SKIP is the chosen state, so a future doctor run does
+  not read as an unfinished setup.
 
 ### The fresh tracker template
 
@@ -419,27 +532,48 @@ tracker whose first three applications are fictional companies, and `/outcome` w
 them.
 
 The spellings are load-bearing. `Last touch` and `Date closed` must carry ISO dates when filled.
-`## Closed` is the only section the radar's `--check` suppression reads, and it reads it by that
-exact heading — a section named `## Archive` is never read. Confirm it parses:
+Confirm it parses:
 
 ```bash
 .venv/bin/python tools/tracker_cli.py check <path to the new tracker>
 ```
 
-**`tracker_active_sections`.** Which sections count as "in flight" for suppression, so the radar
-stops re-surfacing a posting already being worked. The default matches the template's own
-headings, lowercased:
+**`tracker_active_sections`.** Which sections count as "in flight", lowercased, matched against
+the template's own headings:
 
 ```yaml
 tracker_active_sections: [active, drafted but not applied]
 ```
 
+### Two readers, two different sets of sections
+
+Worth stating once, because the two are easy to conflate and they behave differently.
+
+**`python radar.py --check` re-checks the postings in your `tracker_active_sections` only. It
+never reads Closed.** Its job is asking whether the roles you are currently waiting on are still
+live, and a closed application has no such question attached.
+
+**A normal `python radar.py` suppresses companies in those same active sections, plus anyone
+whose `## Closed` row carries a close date inside `closed_window_days`.** A recent close is still
+a live conversation, so re-queueing that company would be a miss; an old close is free to
+resurface, which is why the window is a number in your config rather than a permanent blocklist.
+A Closed row with no parseable date suppresses nothing, deliberately — an unknown close date must
+never silently hide fresh postings.
+
+That second half is read by the literal heading `## Closed` — **a section named `## Archive` is
+never read** — and the close date is taken from the third data column by position, not by header
+name, which is why `Date closed` stays third in the template. If a user rearranges that section's
+columns, suppression silently reads the wrong cell.
+
+A permanent never-again belongs in `exclusions.txt` (Step 5), not in a Closed row. This mechanism
+is a cooling-off window, not a blocklist.
+
 **`followup_after_days`.** How many days of silence on an Active row before `/followup` flags it.
 Ten is the default. Ask for their number; some markets and some people want fourteen.
 
-Where the tracker lives is worth one sentence. It holds real companies and real comp bands. Keep
-it inside `config/` (gitignored) or somewhere outside the repo entirely. **Never at the repo root
-under a name git will track.**
+And whichever branch was taken above, the same rule holds for an existing tracker as for a new
+one: it holds real companies and real comp bands, so it belongs inside `config/` (gitignored) or
+outside the repo entirely. **Never at the repo root under a name git will track.**
 
 ## Step 8 — Privacy setup, and a clean doctor
 
@@ -458,14 +592,20 @@ leaves the machine; its whole job is to know the words that must not leave the m
 full name. Current and past employers. Client names they are under NDA about. Their city if it
 is unusual enough to identify them. One per line, case-insensitive substring match.
 
+Some of those names were already typed into `exclusions.txt` in Step 5, and that is expected
+rather than duplication to clean up. **The two files answer different questions: `exclusions.txt`
+decides what the queue shows you, `.privacy-denylist` decides what a commit is allowed to
+contain.** An employer can easily need both entries, and removing one because the other exists
+breaks whichever job it was doing.
+
 **Activate the hook.** Without it, nothing stops a commit that carries personal data:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-That is a local-only git setting, so it does not travel with a clone and it is exactly what
-doctor check 6 looks for.
+That is a local-only git setting, so it does not travel with a clone, and it is exactly what the
+doctor's `privacy hook` check reads.
 
 **Then prove it.** Run both:
 
@@ -485,15 +625,17 @@ before any commit.
 Close by telling the human what they just built, in the order the engine will use it. Concrete
 values from their own config, never the shipped example's:
 
-1. **`python radar.py` will** scrape *their titles* on *their sites* in *their location*, keep
-   postings newer than *their `hours_old`*, drop titles their `title_drop` rejects and keep the
-   ones `title_keep` matches, run *their N kill rules* and comp floor over the full text, score
-   the survivors on *their weights*, and write `<output_dir>/<today>/queue.md` plus the full text
-   of every posting it touched — kills included, in `jd/`, so a kill can always be checked rather
-   than taken on faith.
-2. **Every kill quotes the line that matched it.** Nothing is filtered silently. When a kill
-   looks wrong, the fix is a rule edited in `config/rules.yaml`, and it applies from the next run
-   forward.
+1. **`python radar.py` will** scrape *their titles* on *their named sites* in *their location*,
+   keeping postings newer than *their `hours_old`*. Then, in this order: skip anything already
+   seen on a previous run, drop any company in *their `exclusions.txt`*, drop any company already
+   in play in the tracker (if one is wired), keep only titles `title_keep` matches and
+   `title_drop` does not, and finally run *their N kill rules* and comp floor over the full
+   posting text. Survivors get scored on *their weights*. Output is
+   `<output_dir>/<today>/queue.md` plus the full text of every posting the run touched — kills
+   included, in `jd/`, so a kill can always be checked rather than taken on faith.
+2. **Every kill names the rule and quotes the line that matched it.** Nothing is filtered
+   silently. When a kill looks wrong, that rule name is what you look up in `config/rules.yaml`,
+   where the `reason` is waiting; the edit you make there applies from the next run forward.
 3. **What comes after a run** — `/apply <path to a jd file>` drafts against the claim ledger and
    never submits; `/outcome` records what happened; `/followup` finds the applications that went
    quiet; `.venv/bin/python tools/calibrate.py <tracker path> --config config` reads closed
