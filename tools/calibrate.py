@@ -51,6 +51,16 @@ def main(argv=None) -> int:
         help="write the report to this file instead of printing it")
     args = parser.parse_args(argv)
 
+    if args.min_n < 1:
+        # Named for what it protects, not just what it forbids. A floor of
+        # zero disables the only check standing between one person's hiring
+        # decision and an edit to the judgment layer.
+        print(f"--min-n must be at least 1, got {args.min_n} — it is the "
+              f"minimum number of applications on each side of a contrast, "
+              f"and it exists so a single application can never carry a "
+              f"proposal", file=sys.stderr)
+        return 1
+
     tracker_path = Path(args.tracker_path)
     try:
         tracker_text = tracker_path.read_text()
