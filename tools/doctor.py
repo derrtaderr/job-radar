@@ -140,6 +140,7 @@ def _check_typst() -> CheckResult:
 
 
 _CONFIG_FIX = "cp -r config.example config"
+_CONFIG_EDIT_FIX = "edit the file named in the error above"
 
 
 def _load_config_or_none(config_dir: Path):
@@ -157,7 +158,15 @@ def _load_config_or_none(config_dir: Path):
 def _check_config(config_dir: Path, error: "str | None") -> CheckResult:
     if error is None:
         return CheckResult("config", True, f"config loads from {config_dir}", "")
-    return CheckResult("config", False, error, _CONFIG_FIX)
+    # `cp -r config.example config` is only safe when config/ never existed —
+    # run it over a populated config/ and it destroys real judgment (kill
+    # rules, comp floor, claim ledger) that no `git checkout` brings back. So
+    # the fix line is conditional on which failure this actually is: a
+    # missing directory gets the copy command, a directory that exists but
+    # failed to load (a bad value the error already names) gets pointed back
+    # at that error instead.
+    fix = _CONFIG_FIX if not config_dir.exists() else _CONFIG_EDIT_FIX
+    return CheckResult("config", False, error, fix)
 
 
 def _check_profile(config_dir: Path, config_error: "str | None") -> CheckResult:
@@ -248,7 +257,7 @@ def _check_tracker(config, config_error: "str | None") -> CheckResult:
             f"edit {config.tracker_path} to fix the violation(s) above")
 
     return CheckResult(
-        "tracker", True, f"{config.tracker_path} matches the Global Constraints contract", "")
+        "tracker", True, f"{config.tracker_path} matches the tracker format contract", "")
 
 
 # --- orchestration ------------------------------------------------------------
