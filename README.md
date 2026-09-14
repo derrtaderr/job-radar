@@ -31,6 +31,8 @@ cp -r config.example config
 # nine checks: python, venv, jobspy, typst, config, profile, the privacy hook,
 # .gitignore integrity, tracker. Read-only — every fix it prints is yours to run.
 
+# fill in config/ with YOUR profile and rules before the real run
+
 .venv/bin/python radar.py --dry-run    # config loads, pipeline runs, nothing written
 .venv/bin/python radar.py              # the real run
 ```
@@ -202,7 +204,10 @@ If you plan to commit anything of your own, fork privately.
 (`python-jobspy`), hitting public job-board endpoints, and the shipped config points at
 LinkedIn. LinkedIn's
 user agreement restricts automated access, and this repo cannot make that not true. What it
-does is keep the volume in personal-use territory: one person's queries, a handful of
+does not do is log in: JobSpy hits public endpoints, and there is nowhere in `config/` to
+put LinkedIn credentials because none are used, so the realistic exposure is IP-level rate
+limiting and bot walls rather than anything happening to an account. Beyond that, it keeps
+the volume in personal-use territory: one person's queries, a handful of
 results each, run occasionally rather than on a schedule, with a per-site list you control
 in `config/queries.yaml`. Boards rate-limit and show bot walls, and when they do the run
 reports it rather than retrying around it. Treat the defaults as a ceiling, not a starting

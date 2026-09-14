@@ -1,6 +1,6 @@
 # Setting up job-radar
 
-The README's quickstart is the five-command version. This is the long one: every
+The README's quickstart is the short version. This is the long one: every
 prerequisite, every config field and what the loader does when it's wrong, the tracker
 format contract, how templates register, how the archive is laid out, what the doctor's
 failures mean, and what the privacy machinery does and does not catch.
@@ -44,10 +44,11 @@ to run the test suite.
 
 ## 2. First run, in order
 
-This is the sequence a fresh clone actually goes through. The ordering matters in one
-place: **run the doctor before you author config, not after.** Editing five YAML files on
-a machine with no virtualenv means an hour of judgment poured into a config nothing can
-load.
+This is the README's quickstart, one step at a time. Same order, and the order matters in
+one place: **run the doctor before you author judgment into config, not after.** Copying
+the example config first is fine and expected — what wastes an hour is writing your own
+kill rules, comp floor and claim ledger on a machine whose virtualenv or Python version
+can't load them.
 
 ```bash
 git clone <this-repo>
@@ -55,23 +56,29 @@ cd job-radar
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 git config core.hooksPath .githooks      # activates the pre-commit privacy check
-.venv/bin/python tools/doctor.py         # fix every FAIL before going on
+cp -r config.example config              # ONLY if config/ doesn't exist yet
+.venv/bin/python tools/doctor.py         # fix every FAIL before you start authoring
 ```
 
-On a fresh clone with nothing configured yet, that last command prints (paths will be
-yours):
+**That `cp -r` only ever runs when `config/` doesn't exist.** `config/` is gitignored, so a
+`cp -r` over a populated one destroys kill rules, a comp floor, and a claim ledger that no
+`git checkout` brings back.
+
+Straight after the copy, the doctor should carry no FAIL — a tracker SKIP is expected, and
+so is a WARN on typst or jobspy if you skipped one of those (paths will be yours):
+
+<!-- doctor-after-copy -->
 
 ```
 OK   python version: python 3.14.6
 OK   venv + required packages: .venv/ present; pypdf, yaml importable
 OK   jobspy: jobspy importable
 OK   typst: typst on PATH
-FAIL config: no config at <repo>/config — copy config.example/ to config/ and edit it (see config.example/README.md)
-     fix: cp -r config.example config
-SKIP profile: config didn't load — see the 'config' check above
+OK   config: config loads from <repo>/config
+OK   profile: <repo>/config/profile.md has the required shape
 OK   privacy hook: core.hooksPath is .githooks
 OK   gitignore integrity: <repo>/.gitignore has all 6 required lines
-SKIP tracker: config didn't load — see the 'config' check above
+SKIP tracker: no tracker: configured in settings.yaml — nothing to check
 ```
 
 Nine checks, always all nine. The doctor never stops at the first problem, because a
@@ -79,20 +86,10 @@ half-set-up machine usually has more than one, and finding them one run at a tim
 trips instead of one. It also never writes anything — including the git config it reads in
 check 7. Every fix it prints is a command you run.
 
-Then bring your own judgment in:
-
-```bash
-cp -r config.example config
-```
-
-**Only when `config/` doesn't exist yet.** `config/` is gitignored, so a `cp -r` over a
-populated one destroys kill rules, a comp floor, and a claim ledger that no `git checkout`
-brings back.
-
-From there, either run `/setup` in a Claude Code session at the repo root (it interviews
-you file by file and reads every pattern back in plain English before writing it), or edit
-the six files by hand using section 3 below. Then re-run the doctor until it is green, and
-take the first run:
+Now bring your own judgment in. Either run `/setup` in a Claude Code session at the repo
+root (it runs the doctor first, then interviews you file by file, reading every pattern
+back in plain English before writing it), or edit the six files in `config/` by hand using
+section 3 below. Then re-run the doctor until it is green again, and take the first run:
 
 ```bash
 .venv/bin/python radar.py --dry-run     # loads config, runs the pipeline on zero rows, writes nothing
@@ -100,7 +97,8 @@ take the first run:
 ```
 
 A green doctor means your config **loads**, not that it is **right**. The example config
-loads perfectly and is a fictional data engineer's search.
+loads perfectly and is a fictional data engineer's search, which is exactly why the
+authoring step above is not optional.
 
 ---
 
@@ -173,7 +171,8 @@ the office"), which defeats the override.
 | `remote_pts` | int | Bonus for a remote posting. |
 | `seniority_pattern` / `seniority_pts` | regex / int | Bonus when the title matches. |
 
-Every key here is required and every points value must be a bare integer.
+Every key here is required except `title_tiers`, which may be absent or empty — every title
+then scores `default_title_pts`. Every points value must be a bare integer.
 
 ### `settings.yaml` — paths, tracker, windows
 
@@ -181,7 +180,7 @@ Every key here is required and every points value must be a bare integer.
 |---|---|---|
 | `output_dir` | yes | Day folders land here. Gitignored as `radar-out/` by default. |
 | `state_file` | yes | Seen-job memory. Keep it inside `config/`, which is gitignored. |
-| `tracker` | yes (may be `null`) | Path to your markdown tracker, or `null`. `null` means no suppression and no `--check`. |
+| `tracker` | no (defaults to `null`) | Path to your markdown tracker. Absent, `null`, or empty all mean no suppression and no `--check`. |
 | `tracker_active_sections` | yes (may be empty) | Which tracker sections count as "in play". Matched against lowercased section names. |
 | `closed_window_days` | yes | A company whose Closed row is dated inside this window stays suppressed. |
 | `followup_after_days` | no, default 10 | An Active row this many days quiet is flagged stale. |
@@ -260,24 +259,35 @@ and doctor check 9) actually enforces:
 
 - **`## Active` and `## Closed` must exist.** The other two are optional.
 - **Required columns.** Active needs `Company`, `Role`, `Last touch`. Closed needs
-  `Company`, `Role`, `Date closed`, `Outcome`. Extra columns anywhere are fine, and the
-  other two sections' columns are expected shape rather than requirements.
+  `Company`, `Role`, `Date closed`, `Outcome`. The other two sections' columns are expected
+  shape rather than requirements. Extra columns are fine everywhere **except before
+  `Date closed` in Closed**: the radar's closed-window suppression reads that date from the
+  third data column **by position**, not by header name, so inserting a column ahead of it
+  silently moves the read onto the wrong cell — and the validator stays green, because the
+  header it requires is still present.
 - **Cell count matches the header count**, per row, reported with a line number.
 - **`Last touch` and `Date closed` carry ISO dates** (`2026-09-13`) whenever non-empty.
 - **No duplicate Company+Role within Active or Drafted but not applied.** Closed and
   Research allow repeats on purpose — reapplying to the same role months later is a real
   thing, and flagging it would be a false positive.
 
-A section heading may carry a parenthetical (`## Research (JD filed, no work started)`);
-the parser strips it, so the section name is `research`. Section names are matched
-lowercased, which is what `tracker_active_sections: [active, drafted but not applied]` in
-`settings.yaml` is comparing against.
+**Headings: two different matchers, and this is the trap.** The *validator* strips a
+trailing parenthetical, so `## Research (JD filed, no work started)` checks as the
+`research` section. **The radar's suppression readers do not strip anything — they match
+the full lowercased heading text.** So `## Active (in play)` with
+`tracker_active_sections: [active]` suppresses **nothing**, and the doctor stays green
+while it does, because the validator is perfectly happy with that heading. Same rule on the
+other side: the closed-window reader matches the literal heading `## Closed`, so
+`## Closed (done)` is never read, exactly like `## Archive` is never read. Keep the four
+headings spelled as the template above spells them, and put annotations in a cell rather
+than in a heading.
 
 **Two readers, two different sets of sections.** `radar.py --check` re-checks only the
 postings in your `tracker_active_sections`; it never reads Closed. A normal `radar.py` run
 suppresses companies in those same active sections, plus anyone whose `## Closed` row
-carries a close date inside `closed_window_days`. That closed reader matches the heading
-literally: a section named `## Archive` is never read.
+carries a close date inside `closed_window_days`. A Closed row with no parseable date
+suppresses nothing, deliberately — an unknown close date must never silently hide fresh
+postings.
 
 Check yours any time:
 
@@ -405,6 +415,12 @@ and by hand:
 Copy `.privacy-denylist.example` to `.privacy-denylist` and list your name, employers,
 clients, and city, one per line, case-insensitive substring.
 
+One assumption in the hook worth knowing: `.githooks/pre-commit` execs
+`.venv/bin/python tools/privacy_guard.py`, that path literally. If your virtualenv lives
+somewhere else or your environment manager puts the interpreter under a different name,
+edit that one line in the hook — otherwise every commit fails on a missing interpreter,
+which looks nothing like a privacy problem.
+
 **What it does not catch**, stated plainly so you don't over-trust it:
 
 - Anything already committed. It scans the current tracked tree, not history.
@@ -442,8 +458,8 @@ scrape time with `radar: scrape module not yet available ... underlying import e
 
 **`WARN typst: typst not on PATH — drafting (resume/cover-letter compile) needs it`** →
 `brew install typst` (or see section 1). The radar is unaffected. If you try to draft
-anyway, the compile step raises `typst binary not found on PATH — install it with
-'brew install typst'` before it writes a PDF.
+anyway, the compile step raises ``typst binary not found on PATH — install it with `brew
+install typst` `` before it writes a PDF.
 
 **`FAIL config: no config at <dir> — copy config.example/ to config/ and edit it`** →
 `cp -r config.example config`, and only when `config/` doesn't already exist. Any other
@@ -457,10 +473,19 @@ error on top of the first.
 line must be `---`. A comment or a heading above it breaks the parse, and this is the one
 placement mistake the schema cannot explain any more specifically.
 
+**`FAIL profile: profile.md frontmatter block is never closed with '---'`** → the file
+opens with a fence but never closes it, so nothing below can be parsed. Add the closing
+`---` line under the last key.
+
 **`FAIL profile: profile.md frontmatter missing keys: [...]`** /
 **`profile.md missing sections: [...]`** / **`profile.md must state the claim-ledger rule
 verbatim`** → see section 3's profile.md fields. The third one means the sentence is
 missing, paraphrased, or re-punctuated; it has to match exactly.
+
+**`FAIL profile: profile.md frontmatter key 'phone' has no value`** → the key is present
+with nothing after the colon. An empty key is the same failure as a missing one from the
+drafter's side: it has nothing to put in the contact line, and `tools/verify_pdf.py` gates
+on those literals appearing in the compiled PDF.
 
 **`FAIL privacy hook: core.hooksPath is not set`** → `git config core.hooksPath .githooks`.
 It is per-clone, so a second clone on another machine needs it again. If it reports a
@@ -487,8 +512,8 @@ nothing written`** → success. Zero rows is what `--dry-run` means, not a broke
 and the seen-job state is deliberately left untouched so a bad run can't poison the next
 one. Usually a rate limit or a bot wall. Wait, then re-run.
 
-**`radar: --check needs a tracker — set 'tracker:' in settings.yaml to a markdown file of
-your applications`** → exit 2. `--check` has nothing to re-check without a tracker.
+**``radar: --check needs a tracker — set `tracker:` in settings.yaml to a markdown file of
+your applications``** → exit 2. `--check` has nothing to re-check without a tracker.
 
 **`UNKNOWN means the check learned nothing (bot wall, rate limit, timeout). Treat as still
 open and verify by hand`** → exactly what it says. Unknown is not a soft "dead", and

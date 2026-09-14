@@ -24,7 +24,7 @@ whose being wrong costs a first-time reader real time:
   will not have.
 - **the quickstart names the doctor, and names `/setup`.** These two are the
   whole difference between a stranger who gets a green environment before
-  authoring judgment and one who edits five YAML files on a machine with no
+  authoring judgment and one who edits six config files on a machine with no
   virtualenv. They are the ordering the doctor and `/setup` were both built to
   enforce, so the README has to point at them.
 - **SETUP.md exists if the README links it.** A README link into a missing file
