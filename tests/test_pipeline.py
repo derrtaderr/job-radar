@@ -9,6 +9,7 @@ from pathlib import Path
 
 from engine.radar.config import load_config
 from engine.radar.pipeline import excluded, pipeline
+from engine.radar.state import seen_date
 from tests.fixtures import BDR_JD, make_row
 
 CFG = load_config(Path(__file__).parent.parent / "config.example")
@@ -53,9 +54,13 @@ def test_pipeline_filters_dedups_and_scores():
 
 
 def test_pipeline_records_today_as_the_seen_date():
+    # Read through the accessor, not off the raw value. A state entry is now a
+    # dict (seen date, company, title, both content fingerprints) and the whole
+    # point of `seen_date` is that no caller has to know which shape it is
+    # holding — a legacy string entry answers this question too.
     _, _, new_state = pipeline([_row("a")], state={}, cfg=CFG,
                                tracker_set=set(), today=TODAY)
-    assert new_state["a"] == str(TODAY)
+    assert seen_date(new_state["a"]) == str(TODAY)
 
 
 def test_pipeline_does_not_mutate_the_state_it_was_given():
