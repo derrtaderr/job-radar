@@ -1,4 +1,4 @@
-"""tools/doctor.py — the environment doctor. Nine independent checks over a
+"""tools/doctor.py — the environment doctor. Ten independent checks over a
 repo + config directory, each returning a CheckResult so one failure never
 hides another. Read-only end to end, including the git config read (check 7)
 — the doctor diagnoses, it never repairs.
@@ -374,6 +374,7 @@ def test_cli_prints_one_line_per_check_and_exits_0_when_all_ok(tmp_path, capsys)
     for name in (
         "python version", "venv + required packages", "jobspy", "typst",
         "config", "profile", "privacy hook", "gitignore integrity", "tracker",
+        "decision ledger",
     ):
         assert name in out
 
@@ -427,3 +428,76 @@ def test_cli_defaults_config_dir_to_repo_root_slash_config(tmp_path):
     exit_code = doctor.main([], repo_root=repo)
 
     assert exit_code == 0
+
+
+# --- check 10: the decision ledger -------------------------------------------
+#
+# Read-only, like every other check. The ledger is written by `radar.py judge`
+# and read by every run, so a row the parser cannot read is judgment the human
+# recorded and the engine silently ignores — the exact failure the ledger exists
+# to close, reintroduced one malformed row at a time.
+
+def test_ledger_ok_when_the_shipped_example_parses(tmp_path):
+    repo = _git_repo(tmp_path)
+    results = doctor.run_checks(repo, _config_dir(tmp_path))
+    result = _result(results, "decision ledger")
+    assert result.ok is True
+    assert "1 decision" in result.detail
+
+
+def test_ledger_skips_when_there_is_no_ledger_yet(tmp_path):
+    # Day one. Nothing has been judged, which is not a problem to fix.
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "decisions.csv").unlink()
+    result = _result(doctor.run_checks(repo, cfg_dir), "decision ledger")
+    assert result.ok == "skip"
+    assert result.fix == ""
+
+
+def test_ledger_fails_and_names_the_unreadable_row(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "decisions.csv").write_text(
+        "jid,company,title,verdict,reason,date,url\n"
+        "j1,Northwind Analytics,Data Engineer,perhaps,unsure,2026-09-25,\n")
+    result = _result(doctor.run_checks(repo, cfg_dir), "decision ledger")
+    assert result.ok is False
+    assert "perhaps" in result.detail
+    assert str(cfg_dir / "decisions.csv") in result.fix
+
+
+def test_ledger_fails_on_a_missing_column(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "decisions.csv").write_text("jid,company,verdict\nj1,Northwind,kill\n")
+    result = _result(doctor.run_checks(repo, cfg_dir), "decision ledger")
+    assert result.ok is False
+    assert "title" in result.detail
+
+
+def test_ledger_skips_when_the_config_did_not_load(tmp_path):
+    # Same shape as the profile and tracker checks: one failure never piles a
+    # second, more confusing error on top of it.
+    repo = _git_repo(tmp_path)
+    result = _result(doctor.run_checks(repo, tmp_path / "nope"), "decision ledger")
+    assert result.ok == "skip"
+
+
+def test_the_ledger_check_writes_nothing(tmp_path):
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "decisions.csv").unlink()
+    doctor.run_checks(repo, cfg_dir)
+    assert not (cfg_dir / "decisions.csv").exists()
+
+
+def test_a_bad_ledger_flips_the_exit_code(tmp_path, capsys):
+    (tmp_path / ".venv").mkdir()
+    repo = _git_repo(tmp_path)
+    cfg_dir = _config_dir(tmp_path)
+    (cfg_dir / "decisions.csv").write_text(
+        "jid,company,title,verdict,reason,date,url\n"
+        "j1,Northwind Analytics,Data Engineer,perhaps,unsure,2026-09-25,\n")
+    assert doctor.main(["--config", str(cfg_dir)], repo_root=repo) == 1
+    assert "decision ledger" in capsys.readouterr().out

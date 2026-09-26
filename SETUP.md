@@ -83,8 +83,8 @@ OK   gitignore integrity: <repo>/.gitignore has all 6 required lines
 SKIP tracker: no tracker: configured in settings.yaml — nothing to check
 ```
 
-Nine checks, always all nine. The doctor never stops at the first problem, because a
-half-set-up machine usually has more than one, and finding them one run at a time is nine
+Ten checks, always all ten. The doctor never stops at the first problem, because a
+half-set-up machine usually has more than one, and finding them one run at a time is ten
 trips instead of one. It also never writes anything — including the git config it reads in
 check 7. Every fix it prints is a command you run.
 

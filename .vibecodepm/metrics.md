@@ -15,7 +15,7 @@ supersedes: none — first metrics file for this repo
 first `radar-out/<date>/queue.md`.**
 
 Measured by two conditions holding together: the doctor reports clean (their config genuinely
-loads — nine checks, WARN never blocks) AND a day folder exists on disk afterward (the run
+loads — ten checks, WARN never blocks) AND a day folder exists on disk afterward (the run
 produced real output, not just an exit code). Neither alone is activation. A clean doctor
 with no run yet is a stranger who set up correctly and stopped; a day folder with a dirty
 doctor can't happen — `radar.py` refuses to run at all on a config that doesn't load.
@@ -52,7 +52,7 @@ where the activation path is broken, and the instrumentation lives in the test s
 
 | What has to be true for activation | What proves it | Where |
 |---|---|---|
-| The doctor genuinely reports clean on a valid config | 8 checks OK + tracker SKIP with config.example (`tracker: null`), exit 0 | `tests/test_doctor.py::test_cli_prints_one_line_per_check_and_exits_0_when_all_ok` |
+| The doctor genuinely reports clean on a valid config | 8 checks OK + tracker SKIP + decision ledger OK with config.example (`tracker: null`, one fictional ledger row), exit 0 | `tests/test_doctor.py::test_cli_prints_one_line_per_check_and_exits_0_when_all_ok` |
 | A WARN (missing typst/jobspy) never blocks activation | WARN present, exit code still 0 | `tests/test_doctor.py::test_cli_warn_never_flips_the_exit_code` |
 | `radar.py` genuinely refuses to run on no config, naming the fix | Exit non-zero, output names `config.example` | `tests/test_entrypoint.py::test_entry_point_exits_nonzero_on_a_missing_config` |
 | A real run writes the day folder AND saves state | `radar-out/<date>/queue.md` exists; state.json updated | `tests/test_cli.py::test_run_writes_the_day_folder_and_saves_state` |
