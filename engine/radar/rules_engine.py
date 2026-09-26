@@ -265,6 +265,86 @@ def kill_flags(row: dict, cfg) -> list:
     return flags
 
 
+# Row 64, rule type C4: the years-of-experience band, read at BOTH ends.
+#
+# A band is a weak claim about a req — boards and recruiters mislabel seniority
+# constantly — and the miss was a ranking failure, not a visibility one. So the
+# floor costs points and the stretch costs nothing, and neither one ever kills.
+_YEARS = r"(?:years?|yrs?)"
+# Alternations ordered most specific first, so "1-4 years" is read as a band
+# rather than as the bare "4 years" the last alternation would find.
+_BAND = re.compile("|".join((
+    r"(\d{1,2})\s*(?:-|–|—|to)\s*\d{1,2}\+?\s*" + _YEARS,
+    r"(?:at least|minimum of|min\.? of)\s*(\d{1,2})\+?\s*" + _YEARS,
+    r"(\d{1,2})\+\s*" + _YEARS,
+    r"(\d{1,2})\s*" + _YEARS,
+)), re.I)
+
+# Phrase floors — a posting that says "early in their career" has stated a floor
+# without stating a number, and treating it as 0 is what the words mean.
+_PHRASE_FLOOR = re.compile(
+    r"early in (?:their|your|his or her) career"
+    r"|entry[- ]level"
+    r"|new grad(?:uate)?s?"
+    r"|recent grad(?:uate)?s?", re.I)
+
+
+def experience_signals(text) -> list:
+    """Every stated experience floor in a body, as (low_years, match) pairs.
+
+    The LOW end of each band is what a floor check needs — "1-4 years" is a
+    junior req whatever its upper bound is. A phrase floor ("entry level")
+    contributes a low of 0, because that is what the phrase means.
+    """
+    body = str(text or "")
+    signals = []
+    for m in _BAND.finditer(body):
+        low = next((g for g in m.groups() if g), None)
+        if low is not None:
+            signals.append((int(low), m))
+    for m in _PHRASE_FLOOR.finditer(body):
+        signals.append((0, m))
+    return signals
+
+
+def seniority_notes(row: dict, cfg) -> list:
+    """Non-kill (name, evidence) notes about the posting's stated seniority.
+
+    Separate from `kill_flags` because these are not kills and must never be
+    mistaken for them by a caller iterating flags. Empty when no `seniority`
+    block is configured: a floor is a personal preference like the comp floor,
+    and there is no honest default to invent for someone who never stated one.
+    """
+    seniority = getattr(cfg, "seniority", None)
+    if not seniority:
+        return []
+
+    text = str(row.get("description") or "")
+    signals = experience_signals(text)
+    if not signals:
+        return []
+
+    notes = []
+    lowest, lowest_match = min(signals, key=lambda s: s[0])
+    if lowest < seniority["min_years"]:
+        notes.append(("junior-band", evidence(lowest_match, text)))
+
+    highest, highest_match = max(signals, key=lambda s: s[0])
+    if highest >= seniority["stretch_years"]:
+        notes.append(("seniority-stretch", evidence(highest_match, text)))
+    return notes
+
+
+def seniority_penalty(row: dict, cfg) -> int:
+    """The points a junior band costs this row. Zero when nothing is flagged."""
+    seniority = getattr(cfg, "seniority", None)
+    if not seniority:
+        return 0
+    if any(name == "junior-band" for name, _ in seniority_notes(row, cfg)):
+        return seniority["penalty"]
+    return 0
+
+
 def _days_old(date_posted, today: "datetime.date") -> int:
     """Port of OLD/rules.py::_days_old (lines 107-141). A missing date_posted
     can't be aged at all, so it's treated as a fixed 14 days old (stale enough
@@ -316,6 +396,12 @@ def score(row: dict, today: "datetime.date", cfg) -> int:
 
     if cfg.weights["seniority_pattern"].search(title):
         pts += cfg.weights["seniority_pts"]
+
+    # A stated floor below the configured one costs points rather than killing.
+    # Deliberately NOT clamped at zero: two junior reqs that differ in every
+    # other dimension should still rank against each other, and clamping throws
+    # that ordering away to make a number look tidier.
+    pts -= seniority_penalty(row, cfg)
 
     return pts
 

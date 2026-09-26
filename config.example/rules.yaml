@@ -23,6 +23,17 @@ onsite_phrases: 'fully on-?site|100 ?% on-?site|on-?site (?:position|role|job|op
 # does. '' restores the untightened override; absent uses the same default.
 hybrid_phrases: '\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b|\bhybrid\b|\d+ days?|in[- ](?:the |our )?office|on-?site'
 
+# The years-of-experience band, read at BOTH ends. A stated floor below
+# min_years costs `penalty` points and flags as `junior-band`; a floor at or
+# above stretch_years flags as `seniority-stretch` and costs nothing. NEITHER
+# ever kills — a band is a weak claim about a req, and the failure it fixes was
+# a junior posting RANKING second, not a junior posting being visible.
+# Remove the block entirely and both checks are off; there is no default floor.
+seniority:
+  min_years: 5
+  penalty: 15
+  stretch_years: 10
+
 rules:
   - name: bdr-scope
     reason: quota or dial-volume language means a sales seat, not an engineering seat
