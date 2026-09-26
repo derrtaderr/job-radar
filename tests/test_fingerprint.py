@@ -68,6 +68,27 @@ def test_comp_fingerprint_falls_back_to_a_body_stated_band():
     assert fp_equal(fp_comp(a), fp_comp(b))
 
 
+def test_comp_fingerprint_is_none_from_a_comp_band_alone():
+    # Caught by running tools/demo.py: two unrelated fictional postings that
+    # happened to share a $130-150K band were flagged as reposts of each other.
+    # A salary band is one of the most collision-prone facts about a posting —
+    # "130-150K, yearly" describes thousands of reqs. The fingerprint is the band
+    # AND the benefits block together, so a band with no benefits block is a
+    # coincidence rather than an identity, and reporting it as one would put a
+    # false "possible repost" on a real posting most days of the week.
+    banded = _row(description="Own the ingestion layer. Apply through our portal.")
+    assert banded["max_amount"]
+    assert fp_comp(banded) is None
+
+
+def test_comp_fingerprint_is_none_from_a_benefits_block_alone():
+    # Mirror image, and the same reasoning: nearly every posting offers medical,
+    # dental and a 401k, so the benefits block alone identifies nothing.
+    benefits_only = _row(min_amount=None, max_amount=None,
+                         description="Own the ingestion layer. " + _BENEFITS)
+    assert fp_comp(benefits_only) is None
+
+
 def test_comp_fingerprint_is_none_with_neither_a_band_nor_a_benefit():
     # A fingerprint of nothing would match every thin posting to every other
     # one, which is the false merge this whole mechanism exists to avoid.
