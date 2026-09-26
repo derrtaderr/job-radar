@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """doctor — read-only environment and config health check for job-radar.
 
-Nine independent checks, each returning a CheckResult, so a stranger with a
+Ten independent checks, each returning a CheckResult, so a stranger with a
 half-set-up machine gets every failure at once instead of one at a time
-across nine runs. The doctor never writes anything, anywhere — including
+across ten runs. The doctor never writes anything, anywhere — including
 the git config read (check 7). It reads `git config core.hooksPath`, never
 sets it; every fix it prints is a command the human runs, not one doctor.py
 runs for them.
@@ -34,6 +34,7 @@ if __package__ in (None, ""):
 from engine.loop.tracker_schema import tracker_check
 from engine.profile_schema import check_profile
 from engine.radar.config import ConfigError, load_config
+from engine.radar.ledger import parse_ledger
 
 MIN_PYTHON = (3, 11)
 REQUIRED_PACKAGES = ("pypdf", "yaml")
@@ -260,13 +261,51 @@ def _check_tracker(config, config_error: "str | None") -> CheckResult:
         "tracker", True, f"{config.tracker_path} matches the tracker format contract", "")
 
 
+def _check_decision_ledger(config, config_error: "str | None") -> CheckResult:
+    """Does the decision ledger parse?
+
+    Read-only, like every other check: it reads `parse_ledger`'s problem list and
+    prints them, and never rewrites a row. The reason this earns a check at all is
+    that the ledger is the one file in `config/` a RUN reads and a human never
+    proof-reads — a row the parser cannot read is judgment they recorded and the
+    engine silently ignores, which is the exact failure the ledger exists to
+    close, reintroduced one malformed row at a time. A run WARNs about such a row;
+    a warning in the middle of a scrape's output is easy to miss, and this is
+    where it gets said again with nothing else competing for attention.
+
+    No ledger at all is a SKIP, not a FAIL. On day one nothing has been judged
+    yet, and there is nothing there to fix.
+    """
+    if config_error is not None:
+        return CheckResult(
+            "decision ledger", "skip",
+            "config didn't load — see the 'config' check above", "")
+
+    path = config.decisions_path
+    if not path.exists():
+        return CheckResult(
+            "decision ledger", "skip",
+            f"no ledger at {path} yet — nothing judged so far", "")
+
+    decisions, problems = parse_ledger(path.read_text())
+    if problems:
+        return CheckResult(
+            "decision ledger", False, "; ".join(problems),
+            f"edit {path} to fix the row(s) above")
+
+    return CheckResult(
+        "decision ledger", True,
+        f"{path} parses ({len(decisions)} decision"
+        f"{'' if len(decisions) == 1 else 's'} recorded)", "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
-    """Run all nine checks and return their CheckResults, in order. Every
+    """Run all ten checks and return their CheckResults, in order. Every
     check runs independently — one failing never skips or hides another,
-    except checks 6 (profile) and 9 (tracker), which SKIP (not FAIL) when
-    there's no loadable Config to check yet."""
+    except checks 6 (profile), 9 (tracker) and 10 (decision ledger), which
+    SKIP (not FAIL) when there's no loadable Config to check yet."""
     repo_root = Path(repo_root)
     config_dir = Path(config_dir)
     config, config_error = _load_config_or_none(config_dir)
@@ -281,6 +320,7 @@ def run_checks(repo_root, config_dir) -> list:
         _check_privacy_hook(repo_root),
         _check_gitignore(repo_root),
         _check_tracker(config, config_error),
+        _check_decision_ledger(config, config_error),
     ]
 
 

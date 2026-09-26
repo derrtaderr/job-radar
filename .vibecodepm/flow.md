@@ -42,8 +42,8 @@ git config core.hooksPath .githooks
 .venv/bin/python tools/doctor.py
 ```
 
-The doctor runs nine checks (python version, venv + packages, jobspy, typst, config,
-profile, the privacy hook, `.gitignore` integrity, tracker) and is read-only — every fix it
+The doctor runs ten checks (python version, venv + packages, jobspy, typst, config,
+profile, the privacy hook, `.gitignore` integrity, tracker, decision ledger) and is read-only — every fix it
 prints is a command the human runs, never one the doctor runs for them. Run it right after
 the clone, before the `git config core.hooksPath` and `cp -r config.example config` steps
 above, and a fresh clone gets two FAILs (config, privacy hook) with everything else either
