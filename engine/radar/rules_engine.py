@@ -9,6 +9,8 @@ import datetime
 import re
 from typing import Optional
 
+from engine.radar.location import pattern_matches_location
+
 _COMP_CONTEXT = re.compile(r"salary|compensation|base pay|pay range|\bcomp\b|\bOTE\b", re.I)
 _MONEY = re.compile(r"\$?\s?(\d{2,3})(?:,(\d{3}))?\s?(k\b)?", re.I)
 
@@ -151,7 +153,12 @@ def kill_flags(row: dict, cfg) -> list:
         )
 
         if effective_location:
-            commute_matches = bool(cfg.commute_pattern and cfg.commute_pattern.search(effective_location))
+            # Normalised, word-bounded matching — never a bare substring of the
+            # raw string. See engine/radar/location.py: a `NY` allowlist used to
+            # match "Pennsylvania, United States" and miss "New York, United
+            # States", so one place got two verdicts in one run.
+            commute_matches = pattern_matches_location(
+                cfg.commute_pattern, effective_location)
             if not commute_matches:
                 override = _jd_says_remote(text) and not _OFFICE_CADENCE.search(text)
                 if not override:

@@ -72,3 +72,53 @@ def strip_territory(text: str) -> str:
     t = _STATE_NAME_RE.sub("", t)
     t = _TERRITORY.sub("", t)
     return t
+
+
+def normalise_location(value) -> str:
+    """One canonical spelling for a location string.
+
+    Lower-cased, country suffix dropped, each comma-separated part mapped from a
+    full state name to its abbreviation, and repeated parts collapsed — so
+    "New York, United States", "New York, NY", "New York" and "NY" all come back
+    as `ny`, and the location rule can no longer resolve one place two ways in
+    one run.
+    """
+    raw = _COUNTRY_SUFFIX.sub("", str(value or ""))
+    parts = []
+    for part in raw.split(","):
+        part = re.sub(r"\s+", " ", part).strip().lower()
+        if not part:
+            continue
+        part = STATES.get(part, part)
+        if part not in parts:
+            parts.append(part)
+    return ", ".join(parts)
+
+
+def pattern_matches_location(pattern, value) -> bool:
+    """Does a commute-allowlist pattern match this location?
+
+    Matched against the NORMALISED parts, and only on word boundaries — never as
+    a bare substring of the raw string. A pattern of `NY` substring-matches
+    "Pennsylvania, United States" (…syl-VA-nia) while missing "New York, United
+    States" entirely, which is one spelling of a place passing and another
+    spelling of the same place being killed in one run. Word-bounded matching on
+    normalised parts rejects `pennsylvania` and accepts `ny`, and still accepts a
+    pattern of `Denver` against a part reading `denver tech center`, which an
+    exact full-match would have broken.
+    """
+    if not pattern:
+        return False
+    for part in normalise_location(value).split(", "):
+        if not part:
+            continue
+        for m in pattern.finditer(part):
+            before = part[m.start() - 1] if m.start() else ""
+            after = part[m.end()] if m.end() < len(part) else ""
+            if not _is_word_char(before) and not _is_word_char(after):
+                return True
+    return False
+
+
+def _is_word_char(ch: str) -> bool:
+    return bool(ch) and (ch.isalnum() or ch == "_")

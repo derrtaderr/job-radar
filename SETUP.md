@@ -145,7 +145,7 @@ drops are the quiet ones, so keep `title_drop` narrow.
 | Key | Type | Behavior |
 |---|---|---|
 | `comp_floor` | int, required | A posting whose posted yearly max is below this is killed as `comp-below-floor`. With no structured comp, the body is scanned for a stated range near salary language; below the floor kills as `comp-below-floor-stated`. |
-| `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. |
+| `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. Matched against the NORMALISED location and only on word boundaries, so `NY` matches "New York, United States", "New York, NY" and "NY" alike and does not match the `ny` inside "Pennsylvania" — while `Denver` still matches "Denver Tech Center, CO". |
 | `rules` | list of `{name, reason, pattern}` | Your named kill rules. All three keys are required on every rule. |
 
 Every kill rule is matched against the posting body, and a match records the rule's name
