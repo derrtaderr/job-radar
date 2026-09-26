@@ -1,7 +1,10 @@
 # Kill rules: every "never again" you learn becomes a line here, enforced on
 # every future posting. A kill quotes the matched line — overrulable, never silent.
 comp_floor: 120000            # yearly max below this (posted or body-stated) kills
-commute_locations: 'Denver|Boulder'   # non-remote postings here still pass; '' = remote-only
+# Non-remote postings here still pass; '' = remote-only. Matched against the
+# NORMALISED location (state names become abbreviations, ', United States' is
+# dropped) and only on word boundaries, so one place cannot resolve two ways.
+commute_locations: 'Denver|Boulder'
 rules:
   - name: bdr-scope
     reason: quota or dial-volume language means a sales seat, not an engineering seat
