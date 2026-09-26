@@ -110,6 +110,10 @@ All six live in `config/`. Paths inside `settings.yaml` resolve relative to `con
 parent — the repo root — not to `config/` itself, so `./radar-out` means
 `<repo>/radar-out`.
 
+Two more files appear in `config/` that are not on that list, because you do not author
+them: `state.json` (seen-job memory) and `decisions.csv` (the decision ledger, section 3.1
+below). Both are written by the tool and read by the next run.
+
 Every loader failure raises a `ConfigError` that names the file and the key. Three
 validation behaviors are worth knowing up front, because they catch the typos YAML is
 happy to accept:
@@ -233,6 +237,45 @@ next run.
 
 `exclusions.txt` is suppression. `.privacy-denylist` (section 7) is privacy. They are
 different files with different jobs; do not merge them.
+
+### 3.1 `decisions.csv` — the decision ledger
+
+Not one of the six files you author. `radar.py judge` writes it and the next run reads it.
+
+```bash
+.venv/bin/python radar.py judge <jid> --verdict kill  --reason bi-analytics
+.venv/bin/python radar.py judge <jid> --verdict draft --reason strong-fit
+```
+
+| Column | What it holds |
+|---|---|
+| `jid` | The posting id, as the queue's JD link names it. May be empty if you judged by company and title. |
+| `company`, `title` | Filled in from `state.json` when you judge by `jid`; `--company` / `--title` override. |
+| `verdict` | Exactly one of `kill` (your judgment ruled it out) or `draft` (you are pursuing it). |
+| `reason` | A short slug for your own recognition later, e.g. `bi-analytics`. Required. |
+| `date`, `url` | The day you decided, and the posting URL if you passed `--url`. |
+
+`#` comment lines are ignored, same as `exclusions.txt`.
+
+**Matching is three tiers, and the second one is why company and title are recorded.** A
+run tries the exact `jid`, then the normalised `(company, title)` pair, then the posting's
+content fingerprint (comp band plus benefits, and title plus body with the territory tokens
+stripped — both kept in `state.json`). Tier 1 alone is not enough: a job board reissues a
+req under a new posting id and it arrives looking brand new, which is the exact miss this
+file exists to close.
+
+**A judged posting is never hidden.** It comes back into the queue with your verdict in the
+Prior column, at the score it would otherwise have. Suppressing it, or scoring it down,
+would be the same failure as losing the decision — you would stop seeing it either way, and
+a reposted copy sometimes carries detail the original lacked. The ledger puts what you
+decided in front of you; it does not decide for you.
+
+A ledger the tool cannot fully parse **warns and keeps every row it can still read**, the
+same way a corrupt `state.json` degrades rather than ending a run. `tools/doctor.py` names
+the unreadable rows so you can fix them.
+
+Like everything in `config/`, it is gitignored and never leaves your machine — and it is the
+one file there that names employers you have made decisions about, so keep it that way.
 
 ### `profile.md` — the claim ledger
 

@@ -52,6 +52,7 @@ class Config:
     weights: dict
     output_dir: Path
     state_file: Path
+    decisions_path: Path
     tracker_path: "Optional[Path]"
     tracker_active_sections: set
     closed_window_days: int
@@ -259,6 +260,15 @@ def load_config(config_dir: Path) -> Config:
     base = config_dir.parent
     output_dir = (base / _require(settings_raw, "output_dir", "settings.yaml")).resolve()
     state_file = (base / _require(settings_raw, "state_file", "settings.yaml")).resolve()
+    # The decision ledger lives INSIDE the config directory by convention, like
+    # profile.md and unlike every settings-keyed path. Three reasons: it is
+    # judgment rather than a path preference; a settings key resolved against
+    # config_dir.parent (as they all are) would make config.example's own shipped
+    # ledger unreadable under `--config config.example`; and one fewer string a
+    # user can mistype into a permanently silent no-op. Absent means nothing has
+    # been judged yet, which is the honest day-one state.
+    decisions_path = config_dir / "decisions.csv"
+
     tracker = settings_raw.get("tracker") or None
     tracker_path = (base / tracker).resolve() if tracker else None
     tracker_active_sections = set(_require_list(
@@ -288,6 +298,7 @@ def load_config(config_dir: Path) -> Config:
         weights=weights,
         output_dir=output_dir,
         state_file=state_file,
+        decisions_path=decisions_path,
         tracker_path=tracker_path,
         tracker_active_sections=tracker_active_sections,
         closed_window_days=closed_window_days,

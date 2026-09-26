@@ -72,16 +72,28 @@ path below is what they'd be signing up for if they kept going with their own se
    **Flags** column (possible repost, junior band, seniority stretch), with the quoted
    evidence for each under **Flagged, not killed**. `--check` re-checks tracked postings for
    liveness instead of scraping fresh ones.
-3. **Apply.** `/apply <JD>` evaluates fit against kill rules and comp floor BEFORE drafting
+3. **Judge.** Reading the queue produces decisions, and `.venv/bin/python radar.py judge
+   <jid> --verdict kill --reason <slug>` is where each one goes — `config/decisions.csv`, a
+   row the next run parses. Without this step the decision lives in a human's head or in
+   markdown prose nothing reads, and the same req comes back as a fresh top-scored row days
+   later. `--verdict draft` accompanies filing a drafted pick in the tracker.
+
+   The state it produces: **a prior verdict attached.** On any later run, a posting the
+   ledger matches (by id, by company and title, or by content fingerprint) renders in the
+   queue with that verdict in the Prior column and at the score it would otherwise have. It
+   is never suppressed and never scored down — see the honesty rules in README. A ledger row
+   the parser cannot read WARNs by row number and the run keeps every row it can read.
+
+4. **Apply.** `/apply <JD>` evaluates fit against kill rules and comp floor BEFORE drafting
    anything, then drafts a resume and cover letter under the claim gate (every bullet traces
    to `config/profile.md` or comes back as `[CONFIRM: ...]`), compiles both with Typst,
    verifies each PDF (`tools/verify_pdf.py`), and runs a keyword check against the posting
    (`tools/ats_check.py`). Never submits anything.
-4. **Outcome.** `/outcome` archives the whole `apply-out/` folder into `archive_dir` the day
+5. **Outcome.** `/outcome` archives the whole `apply-out/` folder into `archive_dir` the day
    the application goes out, then moves the tracker row through Active to Closed as the
    application resolves. `/followup` drafts nudges for quiet Active rows, capped at two per
    application.
-5. **Weekly calibrate.** `tools/calibrate.py <tracker>.md --config config` joins Closed rows
+6. **Weekly calibrate.** `tools/calibrate.py <tracker>.md --config config` joins Closed rows
    to their archives and proposes rule/weight changes — a report a human reads and applies
    by hand. No `--apply` flag exists and none will.
 

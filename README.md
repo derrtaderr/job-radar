@@ -76,7 +76,21 @@ and assume that working directory.
 .venv/bin/python radar.py              # scrape, judge, write today's folder
 .venv/bin/python radar.py --dry-run    # smoke test: config loads, zero rows, writes nothing
 .venv/bin/python radar.py --check      # re-check the postings your tracker is waiting on
+
+.venv/bin/python radar.py judge <jid> --verdict kill  --reason bi-analytics
+.venv/bin/python radar.py judge <jid> --verdict draft --reason strong-fit
 ```
+
+**`judge` is how a morning's decision survives to the next run.** You read the top
+survivors' JDs and decide; `judge` writes that decision to `config/decisions.csv` as a row
+the next run parses. Two verdicts, `kill` (your judgment ruled it out) and `draft` (you are
+pursuing it), plus a short `reason` slug for your own recognition later. The `<jid>` is the
+id the queue's JD link names; company and title are filled in from what the run recorded,
+or you can pass `--company` and `--title` for a posting you read somewhere else.
+
+Matching is deliberately not just the id. A job board reissues a req under a new posting id
+and it arrives looking brand new, so the ledger tries the exact id, then the company and
+title, then the posting's own content fingerprint.
 
 `--check` re-checks only the rows in your `tracker_active_sections` that carry a posting
 URL — put it anywhere in the row (the Notes cell is the natural spot) and the first
@@ -100,6 +114,9 @@ Suppression runs before scoring: a posting you've already seen, a company on you
 exclusions list, and a company already in your tracker never reach the rules. Postings
 suppressed that way are not recorded as seen, so removing a line from either list brings
 that company back on the next run.
+
+The ledger is **not** one of those suppressions, and that is deliberate — see the honesty
+rules below.
 
 ### 2. Drafting — a posting in, two verified PDFs out
 
@@ -174,6 +191,17 @@ information. In the tool's own words:
 
 > Gaps are gaps. If the profile genuinely supports one, work it in; if not, it stays visible — never stuffed.
 
+**A decision you recorded is never a reason a posting is hidden.** A posting you already
+judged comes back into the queue with your verdict in the Prior column, ranked as it would
+otherwise rank. It is not suppressed and it is not scored down. Hiding it on the strength of
+your own past decision would be the same failure as losing the decision — either way you
+never see it again, and the reposted copy sometimes carries detail the original lacked. The
+ledger's job is to put what you decided in front of you, not to decide for you.
+
+**A repost is flagged, never merged.** Two postings whose content fingerprints match get a
+"possible repost of <jid>" flag and both stay in the queue. The engine will not pick which
+copy of a req you should read.
+
 **The follow-up cap counts drafts, not sends.** Two per application, incremented when a
 follow-up is drafted. A draft you read and never sent still spent the slot, and a counter
 that waits on you to report back drifts low and stops capping anything.
@@ -198,7 +226,7 @@ Nothing about a real job search belongs in this repository's history, and the de
 assumes you will never push yours.
 
 Gitignored from the first commit: `config/` (queries, kill rules, comp floor, excluded
-employers, your claim ledger, seen-job state), `radar-out/` (companies, comp, full posting
+employers, your claim ledger, your decision ledger, seen-job state), `radar-out/` (companies, comp, full posting
 text), `apply-out/` (drafts and compiled PDFs carrying your name), `archive/` (everything
 that actually went out), `templates/custom/` (layouts that can embed your contact header),
 and `.privacy-denylist` itself. Doctor check 8 verifies all six lines are still there,

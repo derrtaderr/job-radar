@@ -2,7 +2,7 @@
 the filesystem. Everything below it is pure, which is why the interesting
 failure modes can be tested here in full without a single real request.
 
-Three ways to run:
+Four ways to run:
 
     radar.py                    a normal run: scrape, judge, write the day folder
     radar.py --dry-run          load the config and run the pipeline on zero
@@ -10,6 +10,12 @@ Three ways to run:
     radar.py --check            re-check the postings your tracker says you are
                                 waiting on, so you don't spend an application
                                 hour on a role that already closed.
+    radar.py judge <jid> ...    record the decision you just made about a
+                                posting, so the next run can see it.
+
+`judge` is a subcommand rather than another flag because it is the one verb here
+that WRITES your judgment rather than reading it. It is dispatched on argv before
+argparse sees anything, so no existing invocation changes shape.
 """
 from __future__ import annotations
 
@@ -17,9 +23,10 @@ import argparse
 import datetime
 
 from engine.radar.config import ConfigError, load_config
+from engine.radar.ledger import VERDICTS, Decision, append_decision, load_ledger
 from engine.radar.pipeline import pipeline
 from engine.radar.report import day_paths, write_jds, write_report
-from engine.radar.state import load_state, save_state
+from engine.radar.state import entry_field, load_state, save_state
 from engine.radar.tracker import check_postings, closed_recent_companies, tracker_companies
 
 _NO_SCRAPE = ("radar: scrape module not yet available (engine/radar/scrape.py) — "
@@ -36,6 +43,69 @@ def _parse(argv):
     parser.add_argument("--dry-run", action="store_true",
                         help="load config and run the pipeline on zero rows; writes nothing")
     return parser.parse_args(argv)
+
+
+def _parse_judge(argv):
+    parser = argparse.ArgumentParser(
+        prog="radar judge",
+        description="Record your decision about a posting in the decision ledger.")
+    parser.add_argument("jid", nargs="?", default="",
+                        help="the posting id, as the queue's JD link names it")
+    parser.add_argument("--verdict", required=True, choices=VERDICTS,
+                        help="kill (your judgment ruled it out) or draft (you are pursuing it)")
+    parser.add_argument("--reason", required=True, metavar="SLUG",
+                        help="a short slug you will recognise later, e.g. bi-analytics")
+    parser.add_argument("--company", default="", help="overrides what state.json remembers")
+    parser.add_argument("--title", default="", help="overrides what state.json remembers")
+    parser.add_argument("--url", default="", help="the posting URL, if you have it")
+    parser.add_argument("--config", default="./config", metavar="DIR",
+                        help="config directory (default: ./config)")
+    return parser.parse_args(argv)
+
+
+def _judge(argv) -> int:
+    """Append one decision to the ledger. Returns a process exit code.
+
+    Company and title are backfilled from `state.json` when they were not passed,
+    because the ledger's second matching tier is the normalised (company, title)
+    pair — and that is the tier that catches a req reissued under a new posting
+    id, which is the miss this whole command exists for. A row written by jid
+    alone with those columns empty would only ever match tier 1, the tier that
+    already missed.
+    """
+    args = _parse_judge(argv)
+
+    try:
+        cfg = load_config(args.config)
+    except ConfigError as exc:
+        print(f"radar: {exc}")
+        return 2
+
+    entry = load_state(cfg.state_file).get(args.jid) if args.jid else None
+    company = args.company or (entry_field(entry, "company") or "")
+    title = args.title or (entry_field(entry, "title") or "")
+
+    if not (args.jid or company):
+        print("radar: judge needs something to match a posting on — give a jid "
+              "from the queue, or --company and --title")
+        return 2
+    if args.jid and not company:
+        # A guess here would write a row that can only ever match on the exact
+        # id, which is the tier that already let a reissued req through.
+        print(f"radar: judge doesn't recognise the id {args.jid!r} — this machine "
+              f"has no record of it in {cfg.state_file}. Pass --company and "
+              "--title to record the decision anyway, or check the id against "
+              "today's queue.")
+        return 2
+
+    decision = Decision(jid=args.jid, company=company, title=title,
+                        verdict=args.verdict, reason=args.reason,
+                        date=str(datetime.date.today()), url=args.url)
+    append_decision(cfg.decisions_path, decision)
+    print(f"radar: recorded {args.verdict} ({args.reason}) for "
+          f"{company or args.jid}{' — ' + title if title else ''} "
+          f"-> {cfg.decisions_path}")
+    return 0
 
 
 def _scrape_module():
@@ -130,7 +200,11 @@ def _check(cfg, fetch_fn) -> int:
 
 def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
     """Returns a process exit code. 0 is a real, completed run."""
-    args = _parse(argv or [])
+    argv = list(argv or [])
+    if argv and argv[0] == "judge":
+        return _judge(argv[1:])
+
+    args = _parse(argv)
     today = datetime.date.today()
 
     try:
@@ -148,7 +222,8 @@ def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
         # Still call _tracker_set — a configured-but-missing tracker prints
         # its WARNING there, and a smoke test that reports "config OK" while
         # suppression is silently dead is worse than no smoke test at all.
-        survivors, killed, _ = pipeline([], {}, cfg, _tracker_set(cfg, today), today)
+        survivors, killed, _ = pipeline([], {}, cfg, _tracker_set(cfg, today), today,
+                                        decisions=load_ledger(cfg.decisions_path))
         print(f"radar: dry run — config OK ({len(cfg.queries)} queries, "
               f"{len(cfg.kill_rules)} kill rules), 0 rows in, "
               f"{len(survivors)} queued, {len(killed)} killed, nothing written")
@@ -183,7 +258,8 @@ def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
         return 1
 
     survivors, killed, new_state = pipeline(
-        raw_rows, state, cfg, _tracker_set(cfg, today), today)
+        raw_rows, state, cfg, _tracker_set(cfg, today), today,
+        decisions=load_ledger(cfg.decisions_path))
 
     _, queue_path, jd_dir = day_paths(cfg.output_dir, today)
     jds = write_jds(jd_dir, survivors, killed, str(today))
