@@ -90,6 +90,12 @@ kills listed underneath it rather than swallowed, and `radar-out/<date>/jd/` hol
 text of every posting the run judged — survivors and kills alike, so a suspected false kill
 is readable off disk instead of taken on faith.
 
+The table's **Prior** column carries the verdict you already recorded against a posting, and
+its **Flags** column carries what the run noticed without killing anything — a possible
+repost of an earlier posting, a junior experience band, a ten-year stretch. Every flag's
+quoted evidence sits under **Flagged, not killed**, on the same terms as the kills: a flag
+nobody can check is a flag nobody can overrule.
+
 Suppression runs before scoring: a posting you've already seen, a company on your
 exclusions list, and a company already in your tracker never reach the rules. Postings
 suppressed that way are not recorded as seen, so removing a line from either list brings
