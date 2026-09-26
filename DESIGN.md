@@ -24,6 +24,13 @@ ranked queue and the full text of every posting the run judged. It is a pure pip
 a thin CLI around it; the CLI is the only layer that touches the clock, the network, or the
 filesystem, which is why a whole run's behavior is testable without a single real request.
 
+Radar carries one write path of its own, and it is deliberately small. `radar.py judge`
+records the decision a person made while reading the queue into `config/decisions.csv`, and
+every later run reads that ledger back. Without it, the only durable record of a morning's
+judgment is prose in a markdown file nothing parses, which is how the same req comes back as
+a fresh top-scored row days later. It is the one place a human's conclusion re-enters the
+deterministic half of the system, and it re-enters as data, never as a suppression.
+
 **Drafting** (`engine/draft/`, `/apply`, `/add-template`) turns one ranked posting into an
 application: a Typst resume and cover letter drafted under
 a claim gate, compiled, verified against a page limit and a set of contact literals
@@ -114,6 +121,18 @@ same day folder as the queue — for kills as well as survivors — so a suspect
 is checkable off disk rather than on faith. A rule's configured `reason` is deliberately
 not rendered in the queue; it lives next to the pattern, which is where a rule gets traced.
 
+**A recorded decision attaches; it never hides.** The decision ledger exists so judgment
+compounds, and the temptation it creates is to treat a past `kill` as a filter. It is not
+one. A judged posting returns to the queue with the verdict in a Prior column, at the score
+it would otherwise have, and the human decides again with what they decided before in front
+of them. Two reasons, and both are load-bearing: a reposted copy sometimes carries detail
+the original lacked, and a decision that silently removes postings is indistinguishable, from
+the reader's seat, from a decision that was lost. The same holds for content fingerprints —
+two postings that look like the same req are both shown, flagged as possible reposts of each
+other, because picking which copy a person reads is not the engine's call. The ledger also
+never guesses: a `judge` call naming an id this machine has no record of is refused with the
+fix named, rather than recording a row that could only ever match that exact id.
+
 **The claim gate, and `[CONFIRM]`.** Every drafted resume or cover-letter claim must trace
 to a line in the user's own `profile.md`. Rephrasing and re-emphasizing real experience for
 a posting's vocabulary is the work; inventing a skill, a metric, or a responsibility is
@@ -172,7 +191,8 @@ reach entirely. It is a backstop for the gitignore boundary, not a substitute fo
 
 ## Non-goals
 
-job-radar does not auto-apply to postings, ever. It does not auto-send outreach messages,
+job-radar does not use the decision ledger as a suppression list, and it does not re-rank on
+a prior verdict. Attaching is the whole behavior. It does not auto-apply to postings, ever. It does not auto-send outreach messages,
 follow-ups, or anything else on a person's behalf. It does not edit the judgment layer on
 its own — calibration proposes, a human applies. And it does not call an LLM anywhere
 inside `engine/`: narrowing and scoring stay deterministic, and every generative step lives
