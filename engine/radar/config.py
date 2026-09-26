@@ -47,6 +47,7 @@ class Config:
     commute_pattern: "Optional[re.Pattern[str]]"
     onsite_pattern: "Optional[re.Pattern[str]]"
     hybrid_pattern: "Optional[re.Pattern[str]]"
+    seniority: "Optional[dict]"
     title_tiers: list
     weights: dict
     output_dir: Path
@@ -206,6 +207,22 @@ def load_config(config_dir: Path) -> Config:
     else:
         hybrid_pattern = _compile(DEFAULT_HYBRID_PHRASES, "rules.yaml hybrid_phrases")
 
+    # A seniority floor is a personal preference like comp_floor, not generic
+    # bug-fix machinery, so an absent block means OFF rather than a default —
+    # there is no honest floor to invent for someone who never stated one. Every
+    # value is held to the same int-not-bool guard as the rest of the loader.
+    seniority_raw = rules_raw.get("seniority") or None
+    seniority = None
+    if seniority_raw is not None:
+        if not isinstance(seniority_raw, dict):
+            raise ConfigError(
+                f"'seniority' in rules.yaml must be a mapping of min_years, "
+                f"penalty and stretch_years, got {seniority_raw!r}")
+        seniority = {
+            key: _require_int(seniority_raw, key, "rules.yaml seniority")
+            for key in ("min_years", "penalty", "stretch_years")
+        }
+
     kill_rules = []
     for idx, rule in enumerate(rules_raw.get("rules") or []):
         name = _require(rule, "name", f"rules.yaml rule #{idx}")
@@ -266,6 +283,7 @@ def load_config(config_dir: Path) -> Config:
         commute_pattern=commute_pattern,
         onsite_pattern=onsite_pattern,
         hybrid_pattern=hybrid_pattern,
+        seniority=seniority,
         title_tiers=title_tiers,
         weights=weights,
         output_dir=output_dir,

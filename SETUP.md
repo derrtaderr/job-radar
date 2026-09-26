@@ -148,6 +148,7 @@ drops are the quiet ones, so keep `title_drop` narrow.
 | `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. Matched against the NORMALISED location and only on word boundaries, so `NY` matches "New York, United States", "New York, NY" and "NY" alike and does not match the `ny` inside "Pennsylvania" — while `Denver` still matches "Denver Tech Center, CO". |
 | `onsite_phrases` | regex, optional | Body language that means the role is on-site, killing as `onsite-body` with the line quoted, **even when the header says the role is remote**. A location matching `commute_locations` wins over it. Negated mentions are skipped. `''` turns it off; absent falls back to the engine default, which is what `config.example` spells out. |
 | `hybrid_phrases` | regex, optional | Phrasing that, **in the same sentence as remote language**, means the posting is describing a hybrid arrangement rather than a remote role. Defeats the remote override for that sentence only. `''` restores the untightened override; absent falls back to the engine default. |
+| `seniority` | `{min_years, penalty, stretch_years}`, optional | Reads the years-of-experience band out of the body at both ends. A stated floor below `min_years` costs `penalty` points and flags as `junior-band`; a floor at or above `stretch_years` flags as `seniority-stretch` and costs nothing. Neither ever kills. Remove the block and both checks are off — there is no default floor. |
 | `rules` | list of `{name, reason, pattern}` | Your named kill rules. All three keys are required on every rule. |
 
 Every kill rule is matched against the posting body, and a match records the rule's name
@@ -179,6 +180,12 @@ The **on-site body rule** (`onsite_phrases`) is the mirror of that override, and
 one check here that runs even when the posting's header says the role is remote. A body
 reading "This is a fully on-site position" against a remote header is a posting
 contradicting itself, and the scraper's boolean is the less reliable of the two claims.
+
+**`seniority` is not a kill check and is listed here only because it reads the body the same
+way.** It changes a posting's SCORE and attaches a flag. The failure it fixes is a req
+reading "1-4 years of relevant experience, early in their career" placing second in the
+queue — a ranking failure, which a kill would have answered by hiding the posting instead.
+A stated floor is a weak claim about a req, and the queue is where weak claims belong.
 
 ### `weights.yaml` — the scoring model
 
