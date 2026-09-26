@@ -250,3 +250,16 @@ def test_a_survivor_carries_its_seniority_notes():
 def test_a_survivor_with_nothing_to_note_carries_an_empty_list():
     survivors, _, _ = pipeline([_row("j1")], {}, CFG, set(), TODAY)
     assert survivors[0]["notes"] == []
+
+
+def test_two_unrelated_postings_sharing_a_comp_band_are_not_reposts():
+    # The false positive tools/demo.py surfaced. Nothing but the salary band is
+    # shared, and a band is one of the most collision-prone facts a posting has.
+    first = _row("j1", company="Northwind Analytics", title="Data Engineer",
+                 description="Northwind Analytics is hiring. Own the reporting "
+                             "stack. Apply through our portal.")
+    second = _row("j2", company="Kestrel Dynamics", title="Senior Pipeline Engineer",
+                  description="Kestrel Dynamics is hiring. Run the forecasting "
+                              "product. Apply through our portal.")
+    survivors, _, _ = pipeline([second], _first_run(first), CFG, set(), TODAY)
+    assert survivors[0]["repost_of"] is None

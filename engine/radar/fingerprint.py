@@ -11,7 +11,9 @@ different fingerprints because neither one catches both:
 - **Aggregator repost.** A job board reposts a client's req under its own name
   with the client anonymised out of the prose. The body genuinely differs, so
   `fp_body` cannot bridge it — but the comp band and the benefits block are
-  copied verbatim, so `fp_comp` catches it.
+  copied verbatim, so `fp_comp` catches it. It needs BOTH halves: either one
+  alone collides constantly, and a false repost flag on a real posting is worse
+  than no flag at all.
 
 A fingerprint is evidence for a FLAG, never for a suppression. The aggregator
 copy sometimes carries detail the original lacks, so the run says "possible
@@ -78,17 +80,25 @@ def _comp_band(row: dict):
 
 
 def fp_comp(row: dict):
-    """Comp band plus benefits block, or None when the posting carries neither.
+    """Comp band plus benefits block, or None unless the posting carries BOTH.
 
-    None rather than a hash of emptiness: a fingerprint of nothing would match
-    every thin posting to every other thin posting, which is the false merge
-    this mechanism exists to prevent rather than to cause.
+    Both, not either. Each half alone is far too collision-prone to be an
+    identity: "130-150K, yearly" describes thousands of reqs, and nearly every
+    posting offers medical, dental and a 401k. Running the demo caught this
+    directly — two unrelated fictional postings sharing a $130-150K band were
+    flagged as reposts of each other, which on a real run would put a false
+    "possible repost" on a genuine posting most days of the week.
+
+    Taken together they are specific: a band paired with a particular set of
+    benefits is what an aggregator copies verbatim when it reposts a client's req
+    under its own name, and it is the one thing that survives the client being
+    anonymised out of the prose.
     """
     band = _comp_band(row)
     benefits = benefit_tokens(row.get("description"))
-    if band is None and not benefits:
+    if band is None or not benefits:
         return None
-    return _digest(f"{band or 'no-band'}|{','.join(benefits)}")
+    return _digest(f"{band}|{','.join(benefits)}")
 
 
 def _without_company(text: str, company) -> str:
