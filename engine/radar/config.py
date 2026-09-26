@@ -12,6 +12,8 @@ from typing import Optional
 
 import yaml
 
+from engine.radar.rules_engine import DEFAULT_ONSITE_PHRASES
+
 REQUIRED_FILES = ("queries.yaml", "rules.yaml", "weights.yaml", "settings.yaml", "exclusions.txt")
 
 
@@ -40,6 +42,7 @@ class Config:
     kill_rules: list
     comp_floor: int
     commute_pattern: "Optional[re.Pattern[str]]"
+    onsite_pattern: "Optional[re.Pattern[str]]"
     title_tiers: list
     weights: dict
     output_dir: Path
@@ -179,6 +182,18 @@ def load_config(config_dir: Path) -> Config:
         _compile(commute_locations, "rules.yaml commute_locations") if commute_locations else None
     )
 
+    # `onsite_phrases` is optional and behaves differently absent vs empty, so
+    # the key's PRESENCE is what is tested, not its truthiness. Absent means a
+    # config written before this rule existed, which should still get the fix,
+    # so the engine default applies. Present-and-empty is a deliberate opt-out,
+    # the same shape as `commute_locations: ''`.
+    if "onsite_phrases" in rules_raw:
+        onsite_raw = rules_raw.get("onsite_phrases")
+        onsite_pattern = (_compile(onsite_raw, "rules.yaml onsite_phrases")
+                          if onsite_raw else None)
+    else:
+        onsite_pattern = _compile(DEFAULT_ONSITE_PHRASES, "rules.yaml onsite_phrases")
+
     kill_rules = []
     for idx, rule in enumerate(rules_raw.get("rules") or []):
         name = _require(rule, "name", f"rules.yaml rule #{idx}")
@@ -237,6 +252,7 @@ def load_config(config_dir: Path) -> Config:
         kill_rules=kill_rules,
         comp_floor=comp_floor,
         commute_pattern=commute_pattern,
+        onsite_pattern=onsite_pattern,
         title_tiers=title_tiers,
         weights=weights,
         output_dir=output_dir,
