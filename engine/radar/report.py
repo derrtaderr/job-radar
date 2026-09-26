@@ -110,20 +110,73 @@ def write_jds(jd_dir, survivors, killed, day) -> int:
     return written
 
 
+def _prior_cell(r: dict) -> str:
+    """The verdict this posting was already judged under, e.g. `kill
+    (bi-analytics)`, or empty.
+
+    Its own column rather than a note buried in a list, because the miss this
+    closes is a req the human had already killed by hand coming back as the top
+    row. It has to be legible at the same glance they rank everything else at.
+    """
+    prior = r.get("prior")
+    if not prior:
+        return ""
+    reason = f" ({prior.reason})" if prior.reason else ""
+    return _esc(f"{prior.verdict}{reason}")
+
+
+def _flag_names(r: dict) -> list:
+    """The non-kill flags on a row, as short tokens for the table. The quoted
+    evidence behind each one lives in the "Flagged, not killed" section — a
+    table cell is the wrong place for a ±40-char quote, and dropping the quote
+    to fit would break this repo's floor that every flag is checkable."""
+    names = []
+    if r.get("repost_of"):
+        names.append(f"possible repost of {r['repost_of']}")
+    names += [name for name, _ in r.get("notes") or ()]
+    return names
+
+
 def _render_survivor_row(r: dict) -> str:
     return (f"| {r['score']} | {_esc(r['title'])} | {_esc(r['company'])} | {_comp(r)} "
             f"| {r.get('date_posted') or ''} | {_esc(r.get('location') or '')} "
+            f"| {_prior_cell(r)} | {_esc('; '.join(_flag_names(r)))} "
             f"| {_jd_link(r)} | {r.get('job_url') or ''} |")
 
 
 def _render_killed_line(r: dict) -> str:
     """A kill is shown, never swallowed: the posting struck through, every rule
-    that fired, and the quoted line of the posting that matched it."""
+    that fired, and the quoted line of the posting that matched it. A prior
+    hand-verdict rides along — on a killed row it says the rule is doing what
+    the human wanted, which is the one thing that tells you not to loosen it."""
     flags = "; ".join(f'**{n}**: "{ev}"' for n, ev in r["flags"])
     jd = _jd_link(r)
     tail = f" — {jd}" if jd else ""
-    return (f"- ~~{_esc(r['title'])} @ {_esc(r['company'])}~~ — {flags} "
+    prior = _prior_cell(r)
+    prior_note = f" — prior: {prior}" if prior else ""
+    extra = _flag_names(r)
+    extra_note = f" — {'; '.join(extra)}" if extra else ""
+    return (f"- ~~{_esc(r['title'])} @ {_esc(r['company'])}~~ — {flags}"
+            f"{prior_note}{extra_note} "
             f"— {r.get('job_url') or ''}{tail}")
+
+
+def _flagged_rows(survivors, killed) -> list:
+    """Every row carrying something non-kill worth quoting."""
+    return [r for r in list(survivors) + list(killed)
+            if r.get("prior") or r.get("repost_of") or r.get("notes")]
+
+
+def _render_flagged_line(r: dict) -> str:
+    parts = []
+    prior = r.get("prior")
+    if prior:
+        reason = f" ({prior.reason})" if prior.reason else ""
+        parts.append(f"**prior verdict**: {prior.verdict}{reason} on {prior.date}")
+    if r.get("repost_of"):
+        parts.append(f"**possible repost of** {r['repost_of']}")
+    parts += [f'**{name}**: "{ev}"' for name, ev in r.get("notes") or ()]
+    return f"- {_esc(r.get('title'))} @ {_esc(r.get('company'))} — " + "; ".join(parts)
 
 
 def _render_body(survivors, killed) -> str:
@@ -133,8 +186,8 @@ def _render_body(survivors, killed) -> str:
         # Leading blank line: markdown needs one before a table, or the
         # paragraph above swallows it and the queue renders as a wall of pipes.
         "",
-        "| Score | Role | Company | Comp | Posted | Where | JD | Link |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Score | Role | Company | Comp | Posted | Where | Prior | Flags | JD | Link |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(survivors, key=lambda r: -r["score"]):
         lines.append(_render_survivor_row(r))
@@ -142,7 +195,26 @@ def _render_body(survivors, killed) -> str:
         lines += ["", "## Killed by rule (overrule by hand if the flag is wrong)", ""]
         for r in killed:
             lines.append(_render_killed_line(r))
+    flagged = _flagged_rows(survivors, killed)
+    if flagged:
+        lines += ["", "## Flagged, not killed (the evidence behind the Flags column)", ""]
+        for r in flagged:
+            lines.append(_render_flagged_line(r))
     return "\n".join(lines)
+
+
+def _judged_note(survivors, killed) -> str:
+    """A sentence counting the rows you already judged, or nothing.
+
+    Only when there are some. A standing "0 already judged" on every quiet day
+    would train the eye to skip the line, which is the one line that matters on
+    the day it is not zero.
+    """
+    judged = [r for r in list(survivors) + list(killed) if r.get("prior")]
+    if not judged:
+        return ""
+    return (f" {len(judged)} already judged — your prior verdict is in the Prior "
+            "column, never a reason a posting was hidden.")
 
 
 def render_report(survivors, killed, day):
@@ -163,7 +235,8 @@ def render_report(survivors, killed, day):
         f"# Job radar — {day}",
         "",
         f"{len(survivors)} in the queue, {len(killed)} killed by rule "
-        "(shown below, never silently).",
+        "(shown below, never silently)."
+        + _judged_note(survivors, killed),
         "",
     ]
     return "\n".join(header) + _render_body(survivors, killed) + "\n"

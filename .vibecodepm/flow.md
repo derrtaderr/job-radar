@@ -67,8 +67,11 @@ path below is what they'd be signing up for if they kept going with their own se
    actually wants.
 2. **Daily radar.** `.venv/bin/python radar.py` scrapes, judges every posting against
    `config/`'s rules, and writes `radar-out/<date>/queue.md` — a ranked table with kills
-   shown underneath it, never swallowed, each quoting the line that matched. `--check`
-   re-checks tracked postings for liveness instead of scraping fresh ones.
+   shown underneath it, never swallowed, each quoting the line that matched. The table also
+   carries a **Prior** column (the verdict you already recorded against this posting) and a
+   **Flags** column (possible repost, junior band, seniority stretch), with the quoted
+   evidence for each under **Flagged, not killed**. `--check` re-checks tracked postings for
+   liveness instead of scraping fresh ones.
 3. **Apply.** `/apply <JD>` evaluates fit against kill rules and comp floor BEFORE drafting
    anything, then drafts a resume and cover letter under the claim gate (every bullet traces
    to `config/profile.md` or comes back as `[CONFIRM: ...]`), compiles both with Typst,
