@@ -69,6 +69,37 @@ where the activation path is broken, and the instrumentation lives in the test s
 | It reproduces, so a broken build fails a test rather than "looking flaky" in someone's hands | Two runs (different dirs, and a same-dir rerun) produce byte-identical text artifacts | `tests/test_demo.py::test_two_runs_into_two_dirs_produce_identical_text_artifacts`, `::test_rerun_into_the_same_directory_reproduces_the_queue` |
 | A machine with no typst still completes, with the gap named rather than a traceback | Exit 0, printed note naming typst, no half-written `drafting/` directory | `tests/test_demo.py::test_without_typst_prints_a_note_and_still_exits_zero` |
 
+## How a re-surfaced, already-judged row is counted
+
+**It counts as a queued row, every time, and never as a suppression.**
+
+This is the one counting rule in this file that is a design decision rather than a
+measurement choice, so it is written down rather than left to whoever reads the code next.
+A posting the human already judged (matched by id, by normalised company and title, or by
+content fingerprint) is counted in `N in the queue` exactly like any unjudged posting. It is
+NOT counted as suppressed, NOT excluded from the queue count, and NOT scored down. The
+queue's header adds a separate, additive count — `N already judged` — which is reported only
+when it is non-zero.
+
+**Why additively rather than as its own bucket.** A "judged" bucket subtracted from the
+queue count is a suppression wearing a metric's clothes: the number a person reads each
+morning would silently shrink as their ledger grew, and the postings behind that shrinkage
+would be exactly the ones they had opinions about. The failure this row fixes is a decision
+becoming invisible, and a metric that hides the same rows would reintroduce it at the
+reporting layer after the engine had been fixed.
+
+**Why `0 already judged` is not printed.** A line that appears every day trains the eye to
+skip it, and this line matters most on the day it is not zero.
+
+| What has to be true | What proves it | Where |
+|---|---|---|
+| A judged posting is counted as queued, not suppressed | It appears in survivors and in the queue count | `tests/test_row64_replay.py::test_miss_1_the_judged_req_comes_back_carrying_its_verdict` |
+| Its score is untouched by the verdict | Identical score with and without the ledger row | `tests/test_row64_replay.py::test_miss_1_the_judged_req_is_not_quietly_ranked_down_either` |
+| The count reaches the artifact a person reads | `N already judged` in `queue.md`, and in a same-day second run's heading | `tests/test_report_row64.py::test_the_header_counts_the_rows_carrying_a_prior_verdict`, `::test_a_second_run_on_the_same_day_also_says_what_it_already_judged` |
+| Zero is silent | No "already judged" text when nothing is judged | `tests/test_report_row64.py::test_the_header_says_nothing_about_prior_verdicts_when_there_are_none` |
+| A repost is counted as its own queued row, never merged away | Both postings queued, one flagged | `tests/test_row64_replay.py::test_miss_2_a_repost_is_flagged_and_never_suppressed` |
+| The ledger the demo ships is visible in the demo's own queue | `Prior` column and `already judged` in `demo-out`'s `queue.md` | `tests/test_demo.py::test_the_queue_shows_a_prior_verdict_from_the_example_ledger` |
+
 ## Secondary metric: first `/outcome` recorded
 
 **A user archives their first application** — `/outcome` copies the `apply-out/` folder into
