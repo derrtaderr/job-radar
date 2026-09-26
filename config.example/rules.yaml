@@ -5,6 +5,17 @@ comp_floor: 120000            # yearly max below this (posted or body-stated) ki
 # NORMALISED location (state names become abbreviations, ', United States' is
 # dropped) and only on word boundaries, so one place cannot resolve two ways.
 commute_locations: 'Denver|Boulder'
+# Body language that means the role is ON-SITE, even when the header claims it
+# is remote. A posting that contradicts itself is a real class, and the
+# scraper's remote flag is the less reliable of the two claims. Kills as
+# `onsite-body`, quoting the matched line like every other kill.
+#
+# A location matching commute_locations above WINS over this — an on-site role
+# in a city you can commute to is a role you want. Negated mentions ("this is
+# not an on-site position") are skipped. Set to '' to turn the rule off;
+# remove the key entirely and the same default below still applies.
+onsite_phrases: 'fully on-?site|100 ?% on-?site|on-?site (?:position|role|job|opportunity)|in[- ]office \d+ days?|in (?:the |our )?office \d+ days?|\d+ days? (?:a |per )?week in (?:the |our )?office|required to (?:be|work) on-?site'
+
 rules:
   - name: bdr-scope
     reason: quota or dial-volume language means a sales seat, not an engineering seat

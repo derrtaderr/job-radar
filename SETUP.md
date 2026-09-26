@@ -146,6 +146,7 @@ drops are the quiet ones, so keep `title_drop` narrow.
 |---|---|---|
 | `comp_floor` | int, required | A posting whose posted yearly max is below this is killed as `comp-below-floor`. With no structured comp, the body is scanned for a stated range near salary language; below the floor kills as `comp-below-floor-stated`. |
 | `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. Matched against the NORMALISED location and only on word boundaries, so `NY` matches "New York, United States", "New York, NY" and "NY" alike and does not match the `ny` inside "Pennsylvania" — while `Denver` still matches "Denver Tech Center, CO". |
+| `onsite_phrases` | regex, optional | Body language that means the role is on-site, killing as `onsite-body` with the line quoted, **even when the header says the role is remote**. A location matching `commute_locations` wins over it. Negated mentions are skipped. `''` turns it off; absent falls back to the engine default, which is what `config.example` spells out. |
 | `rules` | list of `{name, reason, pattern}` | Your named kill rules. All three keys are required on every rule. |
 
 Every kill rule is matched against the posting body, and a match records the rule's name
@@ -155,12 +156,19 @@ plus the matched line as quoted evidence.
 evidence line only. `reason` lives in `rules.yaml` next to the pattern, which is where you
 trace a kill's why — write it for yourself six months from now, not for the queue.
 
-Two kill checks are built into the engine rather than configured: the comp floor above,
-and a location rule that kills a non-remote posting outside `commute_locations`. The
-location rule reads the structured location first, falls back to "based in / office in /
-on-site in <City>" in the body, and lets affirmative remote language in the posting
-override it — unless the body also carries in-office cadence language ("3 days a week in
-the office"), which defeats the override.
+Three kill checks are built into the engine rather than written as named rules: the comp
+floor above, the location rule, and the on-site body rule.
+
+The **location rule** kills a non-remote posting outside `commute_locations`. It reads the
+structured location first, falls back to "based in / office in / on-site in <City>" in the
+body, normalises whatever it finds (see the `commute_locations` row above) and lets
+affirmative remote language in the posting override it — unless the body also carries
+in-office cadence language ("3 days a week in the office"), which defeats the override.
+
+The **on-site body rule** (`onsite_phrases`) is the mirror of that override, and it is the
+one check here that runs even when the posting's header says the role is remote. A body
+reading "This is a fully on-site position" against a remote header is a posting
+contradicting itself, and the scraper's boolean is the less reliable of the two claims.
 
 ### `weights.yaml` — the scoring model
 

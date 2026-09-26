@@ -29,17 +29,29 @@ _REMOTE_OK = re.compile(
 _NEG = re.compile(r"\b(?:not|no|isn'?t|never)\b", re.I)
 
 
-def _jd_says_remote(text):
-    """Affirmative remote language in the JD, skipping negated mentions — "not a
-    remote position" (negation before) and "remote work is not available"
-    (negation after, checked only to the end of the sentence)."""
-    for m in _REMOTE_OK.finditer(text):
+def _unnegated(pattern, text):
+    """The first match of `pattern` that is not negated, as quoted evidence.
+
+    Negation is checked in a 30-char window before the match ("not a remote
+    position") and to the end of the sentence after it ("remote work is not
+    available"). Shared by the affirmative remote override and the on-site body
+    rule, which are mirror images of each other and must read a negation the
+    same way — two copies of this walk would eventually disagree.
+    """
+    if not pattern:
+        return None
+    for m in pattern.finditer(text):
         before = text[max(0, m.start() - 30):m.start()]
         after = text[m.end():m.end() + 30].split(".")[0]
         if _NEG.search(before) or _NEG.search(after):
             continue
         return evidence(m, text)
     return None
+
+
+def _jd_says_remote(text):
+    """Affirmative remote language in the JD, skipping negated mentions."""
+    return _unnegated(_REMOTE_OK, text)
 
 
 def jd_says_remote(text):
@@ -66,6 +78,25 @@ _OFFICE_CADENCE = re.compile(
     r"\d+ days? (?:a |per )?week in (?:the |our )?office|days? in[- ]office"
     r"|hybrid (?:schedule|work model|role)|in[- ]office \d+ days?"
     r"|work from home [A-Z][a-z]+days", re.I)
+
+
+# Row 64, rule type C2: the mirror of _REMOTE_OK. Body language that describes
+# the ROLE as on-site, which a header saying is_remote=True does not get to
+# overrule — a posting that contradicts itself is a real class, and the
+# scraper's boolean is the less reliable of the two claims.
+#
+# Used as the default for rules.yaml's `onsite_phrases`, so a config written
+# before this rule existed still gets the fix. Setting the key REPLACES this
+# set; setting it to '' turns the rule off, same shape as `commute_locations`.
+DEFAULT_ONSITE_PHRASES = (
+    r"fully on-?site"
+    r"|100 ?% on-?site"
+    r"|on-?site (?:position|role|job|opportunity)"
+    r"|in[- ]office \d+ days?"
+    r"|in (?:the |our )?office \d+ days?"
+    r"|\d+ days? (?:a |per )?week in (?:the |our )?office"
+    r"|required to (?:be|work) on-?site"
+)
 
 
 def body_location(text):
@@ -145,20 +176,30 @@ def kill_flags(row: dict, cfg) -> list:
         if stated_max is not None and stated_max < cfg.comp_floor:
             flags.append(("comp-below-floor-stated", snippet))
 
-    if not row.get("is_remote"):
-        structured_location = str(row.get("location") or "").strip()
-        body_match = None if structured_location else _BODY_LOC.search(text)
-        effective_location = structured_location or (
-            next((g for g in body_match.groups() if g), None) if body_match else None
-        )
+    # Where the posting says it is, computed ONCE and outside the is_remote
+    # guard below, because the on-site body rule needs it too — and that rule
+    # has to run even when the header claims the role is remote.
+    structured_location = str(row.get("location") or "").strip()
+    body_match = None if structured_location else _BODY_LOC.search(text)
+    effective_location = structured_location or (
+        next((g for g in body_match.groups() if g), None) if body_match else None
+    )
+    # Normalised, word-bounded matching — never a bare substring of the raw
+    # string. See engine/radar/location.py: a `NY` allowlist used to match
+    # "Pennsylvania, United States" and miss "New York, United States", so one
+    # place got two verdicts in one run.
+    commute_matches = pattern_matches_location(cfg.commute_pattern, effective_location)
 
+    # The body contradicting its own header. The commute allowlist WINS over
+    # this: an on-site role in a city the user can actually commute to is a role
+    # they want, and killing it would be the opposite of the miss being fixed.
+    if not commute_matches:
+        onsite_evidence = _unnegated(cfg.onsite_pattern, text)
+        if onsite_evidence:
+            flags.append(("onsite-body", onsite_evidence))
+
+    if not row.get("is_remote"):
         if effective_location:
-            # Normalised, word-bounded matching — never a bare substring of the
-            # raw string. See engine/radar/location.py: a `NY` allowlist used to
-            # match "Pennsylvania, United States" and miss "New York, United
-            # States", so one place got two verdicts in one run.
-            commute_matches = pattern_matches_location(
-                cfg.commute_pattern, effective_location)
             if not commute_matches:
                 override = _jd_says_remote(text) and not _OFFICE_CADENCE.search(text)
                 if not override:
