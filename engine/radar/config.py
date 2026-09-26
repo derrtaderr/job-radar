@@ -12,7 +12,10 @@ from typing import Optional
 
 import yaml
 
-from engine.radar.rules_engine import DEFAULT_ONSITE_PHRASES
+from engine.radar.rules_engine import (
+    DEFAULT_HYBRID_PHRASES,
+    DEFAULT_ONSITE_PHRASES,
+)
 
 REQUIRED_FILES = ("queries.yaml", "rules.yaml", "weights.yaml", "settings.yaml", "exclusions.txt")
 
@@ -43,6 +46,7 @@ class Config:
     comp_floor: int
     commute_pattern: "Optional[re.Pattern[str]]"
     onsite_pattern: "Optional[re.Pattern[str]]"
+    hybrid_pattern: "Optional[re.Pattern[str]]"
     title_tiers: list
     weights: dict
     output_dir: Path
@@ -194,6 +198,14 @@ def load_config(config_dir: Path) -> Config:
     else:
         onsite_pattern = _compile(DEFAULT_ONSITE_PHRASES, "rules.yaml onsite_phrases")
 
+    # Same absent-vs-empty distinction as onsite_phrases above.
+    if "hybrid_phrases" in rules_raw:
+        hybrid_raw = rules_raw.get("hybrid_phrases")
+        hybrid_pattern = (_compile(hybrid_raw, "rules.yaml hybrid_phrases")
+                          if hybrid_raw else None)
+    else:
+        hybrid_pattern = _compile(DEFAULT_HYBRID_PHRASES, "rules.yaml hybrid_phrases")
+
     kill_rules = []
     for idx, rule in enumerate(rules_raw.get("rules") or []):
         name = _require(rule, "name", f"rules.yaml rule #{idx}")
@@ -253,6 +265,7 @@ def load_config(config_dir: Path) -> Config:
         comp_floor=comp_floor,
         commute_pattern=commute_pattern,
         onsite_pattern=onsite_pattern,
+        hybrid_pattern=hybrid_pattern,
         title_tiers=title_tiers,
         weights=weights,
         output_dir=output_dir,

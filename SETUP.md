@@ -147,6 +147,7 @@ drops are the quiet ones, so keep `title_drop` narrow.
 | `comp_floor` | int, required | A posting whose posted yearly max is below this is killed as `comp-below-floor`. With no structured comp, the body is scanned for a stated range near salary language; below the floor kills as `comp-below-floor-stated`. |
 | `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. Matched against the NORMALISED location and only on word boundaries, so `NY` matches "New York, United States", "New York, NY" and "NY" alike and does not match the `ny` inside "Pennsylvania" — while `Denver` still matches "Denver Tech Center, CO". |
 | `onsite_phrases` | regex, optional | Body language that means the role is on-site, killing as `onsite-body` with the line quoted, **even when the header says the role is remote**. A location matching `commute_locations` wins over it. Negated mentions are skipped. `''` turns it off; absent falls back to the engine default, which is what `config.example` spells out. |
+| `hybrid_phrases` | regex, optional | Phrasing that, **in the same sentence as remote language**, means the posting is describing a hybrid arrangement rather than a remote role. Defeats the remote override for that sentence only. `''` restores the untightened override; absent falls back to the engine default. |
 | `rules` | list of `{name, reason, pattern}` | Your named kill rules. All three keys are required on every rule. |
 
 Every kill rule is matched against the posting body, and a match records the rule's name
@@ -163,7 +164,16 @@ The **location rule** kills a non-remote posting outside `commute_locations`. It
 structured location first, falls back to "based in / office in / on-site in <City>" in the
 body, normalises whatever it finds (see the `commute_locations` row above) and lets
 affirmative remote language in the posting override it — unless the body also carries
-in-office cadence language ("3 days a week in the office"), which defeats the override.
+in-office cadence language ("3 days a week in the office"), which defeats the override
+document-wide, or `hybrid_phrases` appears in the same SENTENCE as the remote language,
+which defeats it for that sentence.
+
+The sentence scope is the difference between "work from home Wednesdays", which the
+document-wide check already caught, and "Tuesdays and Fridays are remote/work from home
+days", which it did not, because the day names arrive before the phrase rather than after
+it. A rejected sentence does not end the search: "Fridays used to be work from home days.
+The role is now fully remote for everyone." still overrides, because the second sentence is
+a true statement about the role.
 
 The **on-site body rule** (`onsite_phrases`) is the mirror of that override, and it is the
 one check here that runs even when the posting's header says the role is remote. A body

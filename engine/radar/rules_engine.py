@@ -29,7 +29,40 @@ _REMOTE_OK = re.compile(
 _NEG = re.compile(r"\b(?:not|no|isn'?t|never)\b", re.I)
 
 
-def _unnegated(pattern, text):
+# Row 64, rule type C3: phrasing that means the sentence is describing a HYBRID
+# arrangement rather than a remote role. Checked inside the sentence carrying the
+# remote language, which is the scope _OFFICE_CADENCE's document-wide check
+# cannot express: "work from home Wednesdays" it catches, "Tuesdays and Fridays
+# are remote/work from home days" it does not, because the day names arrive
+# before the phrase rather than after it.
+DEFAULT_HYBRID_PHRASES = (
+    r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b"
+    r"|\bhybrid\b"
+    r"|\d+ days?"
+    r"|in[- ](?:the |our )?office"
+    r"|on-?site"
+)
+
+_SENTENCE_END = re.compile(r"[.!?\n]")
+
+
+def _sentence_around(text: str, start: int, end: int) -> str:
+    """The sentence a match sits in.
+
+    Scoped to one sentence rather than to a fixed character window, because the
+    unit that makes a claim about the role is the sentence. A window would cut
+    "Tuesdays and Fridays are remote/work from home days" in half at any width
+    narrow enough to be useful.
+    """
+    left = 0
+    for m in _SENTENCE_END.finditer(text, 0, start):
+        left = m.end()
+    right_match = _SENTENCE_END.search(text, end)
+    right = right_match.start() if right_match else len(text)
+    return text[left:right]
+
+
+def _unnegated(pattern, text, reject_in_sentence=None):
     """The first match of `pattern` that is not negated, as quoted evidence.
 
     Negation is checked in a 30-char window before the match ("not a remote
@@ -37,6 +70,11 @@ def _unnegated(pattern, text):
     available"). Shared by the affirmative remote override and the on-site body
     rule, which are mirror images of each other and must read a negation the
     same way — two copies of this walk would eventually disagree.
+
+    `reject_in_sentence`, when given, also rejects a match whose own SENTENCE
+    carries that pattern. A rejection continues the walk rather than ending it: a
+    posting may describe a hybrid past in one sentence and a remote present in
+    the next, and the later sentence is still a true statement about the role.
     """
     if not pattern:
         return None
@@ -45,22 +83,33 @@ def _unnegated(pattern, text):
         after = text[m.end():m.end() + 30].split(".")[0]
         if _NEG.search(before) or _NEG.search(after):
             continue
+        if reject_in_sentence is not None and reject_in_sentence.search(
+                _sentence_around(text, m.start(), m.end())):
+            continue
         return evidence(m, text)
     return None
 
 
-def _jd_says_remote(text):
-    """Affirmative remote language in the JD, skipping negated mentions."""
-    return _unnegated(_REMOTE_OK, text)
+def _jd_says_remote(text, hybrid_pattern=None):
+    """Affirmative remote language in the JD, skipping negated mentions and — when
+    `hybrid_pattern` is given — mentions whose own sentence names in-office days
+    or hybrid phrasing."""
+    return _unnegated(_REMOTE_OK, text, reject_in_sentence=hybrid_pattern)
 
 
-def jd_says_remote(text):
+def jd_says_remote(text, hybrid_pattern=None):
     """Public name for the remote-language detector above, returning the
     quoted evidence or None. engine/loop/calibrate.py contrasts remote
     language against application outcomes and needs this; reaching across
     packages for `_jd_says_remote` would make any refactor here break the
-    calibrator silently, so the behavior carries a supported name instead."""
-    return _jd_says_remote(text)
+    calibrator silently, so the behavior carries a supported name instead.
+
+    `hybrid_pattern` is opt-in rather than defaulted. The kill path passes
+    `cfg.hybrid_pattern`; the calibrator does not, because tightening what a
+    report says about a season already recorded is a different decision from
+    tightening today's kills, and it is not this change's to make.
+    """
+    return _jd_says_remote(text, hybrid_pattern)
 
 
 # Rule-tuning candidate 2 (Task 7): an office city stated only in the body, and
@@ -201,7 +250,8 @@ def kill_flags(row: dict, cfg) -> list:
     if not row.get("is_remote"):
         if effective_location:
             if not commute_matches:
-                override = _jd_says_remote(text) and not _OFFICE_CADENCE.search(text)
+                override = (_jd_says_remote(text, cfg.hybrid_pattern)
+                            and not _OFFICE_CADENCE.search(text))
                 if not override:
                     loc_evidence = structured_location if structured_location else evidence(body_match, text)
                     flags.append(("location", loc_evidence))

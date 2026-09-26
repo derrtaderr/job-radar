@@ -16,6 +16,13 @@ commute_locations: 'Denver|Boulder'
 # remove the key entirely and the same default below still applies.
 onsite_phrases: 'fully on-?site|100 ?% on-?site|on-?site (?:position|role|job|opportunity)|in[- ]office \d+ days?|in (?:the |our )?office \d+ days?|\d+ days? (?:a |per )?week in (?:the |our )?office|required to (?:be|work) on-?site'
 
+# Phrasing that means a sentence is describing a HYBRID arrangement, not a
+# remote role. Checked INSIDE the sentence that carries the remote language, so
+# "Tuesdays and Fridays are remote/work from home days" no longer passes as
+# remote while "This is a fully remote role. Our office is in Chicago." still
+# does. '' restores the untightened override; absent uses the same default.
+hybrid_phrases: '\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b|\bhybrid\b|\d+ days?|in[- ](?:the |our )?office|on-?site'
+
 rules:
   - name: bdr-scope
     reason: quota or dial-volume language means a sales seat, not an engineering seat
