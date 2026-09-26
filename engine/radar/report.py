@@ -254,8 +254,13 @@ def write_report(path, survivors, killed, day) -> bool:
         return False
     path = Path(path)
     if path.exists():
+        # The appended block carries no frontmatter header, so the judged count
+        # has to ride on the heading — otherwise the one line that says "you have
+        # already decided about some of these" is missing from exactly the block
+        # the reader is looking at.
+        note = _judged_note(survivors, killed)
         with path.open("a") as f:
-            f.write("\n## Later run (same day)\n\n"
+            f.write(f"\n## Later run (same day){note}\n\n"
                     + _render_body(survivors, killed) + "\n")
     else:
         path.parent.mkdir(parents=True, exist_ok=True)

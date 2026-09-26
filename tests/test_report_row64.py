@@ -132,3 +132,19 @@ def test_the_header_counts_the_rows_carrying_a_prior_verdict():
 
 def test_the_header_says_nothing_about_prior_verdicts_when_there_are_none():
     assert "already judged" not in render_report([_survivor()], [], DAY)
+
+
+# --- the same-day append ------------------------------------------------------
+
+def test_a_second_run_on_the_same_day_also_says_what_it_already_judged(tmp_path):
+    # A same-day run APPENDS rather than overwriting, and the appended block has
+    # no frontmatter header — so without this the one line that says "you have
+    # already decided about some of these" is missing from exactly the block a
+    # reader is looking at.
+    from engine.radar.report import write_report
+
+    path = tmp_path / "queue.md"
+    write_report(path, [_survivor()], [], DAY)
+    write_report(path, [_survivor(prior=KILLED_BY_HAND)], [], DAY)
+    later = path.read_text().split("## Later run (same day)", 1)[1]
+    assert "1 already judged" in later
