@@ -49,6 +49,19 @@ By hand:
   substring match.
 - `profile.md` — your career facts, and the one file the drafting side reads.
 
+Two more files live here that you do not author. The tool writes them and the next run
+reads them:
+
+- `decisions.csv` — the decision ledger. `radar.py judge <jid> --verdict kill --reason
+  <slug>` appends a row; the next run attaches that verdict to any posting it matches, by
+  id, by company and title, or by content fingerprint. A judged posting is never hidden —
+  it comes back with your verdict in the queue's Prior column, at the score it would
+  otherwise have. The copy shipped here holds ONE fictional row, matching one of the canned
+  postings `tools/demo.py` runs, so the demo shows the mechanism. Delete it once this
+  folder is your `config/`.
+- `state.json` — seen-job memory, plus the company, title and content fingerprints each run
+  recorded. Not shipped here; the first run creates it.
+
 ## profile.md is the claim ledger
 
 `profile.md` is different in kind from the other files here. The rest tell the engine what

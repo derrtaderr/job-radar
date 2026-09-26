@@ -19,9 +19,12 @@ This is NOT a way to run your own search, and it never touches one:
 What it runs, in order:
 
 1. **Radar.** Twelve canned postings (`tests/fixtures_demo_rows.py`) through
-   the real pipeline (`engine/radar/pipeline.py`) with empty state and an
-   empty tracker set, rendered into a day folder by the real report code
-   (`engine/radar/report.py`) — a queue with kills shown, never swallowed.
+   the real pipeline (`engine/radar/pipeline.py`) with empty state, an empty
+   tracker set, and `config.example`'s own fictional decision ledger,
+   rendered into a day folder by the real report code
+   (`engine/radar/report.py`) — a queue with kills shown, never swallowed,
+   and one posting carrying the prior verdict the example ledger records
+   against it.
 2. **Drafting.** If `typst` is on PATH: compiles the example resume and
    cover letter (`tests/fixtures/resume_example.typ`, `.../cover_example.typ`
    — the same fictional persona, already filled in), verifies each PDF
@@ -55,6 +58,7 @@ from engine.draft.compile import compile_pdf
 from engine.draft.registry import load_registry
 from engine.loop.calibrate import calibration_report
 from engine.radar.config import load_config
+from engine.radar.ledger import load_ledger
 from engine.radar.pipeline import pipeline
 from engine.radar.report import day_paths, write_jds, write_report
 from engine.radar.state import save_state
@@ -185,7 +189,12 @@ def _run_radar_pass(out_dir: Path) -> tuple:
 
     from tests.fixtures_demo_rows import DEMO_ROWS
 
-    survivors, killed, new_state = pipeline(DEMO_ROWS, {}, cfg, set(), DEMO_TODAY)
+    # The example ledger rides along, so the demo shows a prior verdict attached
+    # to a posting that is still in the queue — the headline mechanism, on the
+    # one surface a stranger actually looks at.
+    survivors, killed, new_state = pipeline(
+        DEMO_ROWS, {}, cfg, set(), DEMO_TODAY,
+        decisions=load_ledger(cfg.decisions_path))
 
     day_dir, queue_path, jd_dir = day_paths(cfg.output_dir, DEMO_TODAY)
     jds_written = write_jds(jd_dir, survivors, killed, str(DEMO_TODAY))

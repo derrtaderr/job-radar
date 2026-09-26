@@ -1,0 +1,19 @@
+# The decision ledger. One row per decision YOU made about a posting, written by
+# `radar.py judge`, read by the next run. This is the file that makes a morning's
+# judgment durable instead of leaving it in a markdown note nothing parses.
+#
+# `verdict` is one of exactly two values: `kill` (your judgment ruled it out) or
+# `draft` (you are pursuing it). `reason` is a short slug you will recognise six
+# months from now — it is for you, not for the queue.
+#
+# A judged posting is NEVER hidden. It comes back into the queue with this
+# verdict in the Prior column, ranked as it would otherwise rank, so you decide
+# again with the decision you already made in front of you. Matching tries the
+# exact id first, then the company and title, then the posting's content
+# fingerprint — which is how a req reissued under a new id still finds its row.
+#
+# The one row below belongs to this folder's FICTIONAL persona and matches one of
+# the twelve canned postings `tools/demo.py` runs. Delete it when you copy this
+# folder to config/; your own decisions replace it one `judge` call at a time.
+jid,company,title,verdict,reason,date,url
+demo-3,Meridian Analytics,Analytics Engineer,kill,bi-analytics,2026-09-12,https://example.com/jobs/demo-3

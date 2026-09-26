@@ -245,3 +245,18 @@ def test_cli_subprocess_runs_clean_from_the_repo_root(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (out_dir / "radar-out").exists()
     assert (out_dir / "loop-demo" / "calibration-report.md").is_file()
+
+
+def test_the_queue_shows_a_prior_verdict_from_the_example_ledger(tmp_path):
+    """The demo is where a stranger decides whether this repo is worth the setup
+    cost, and the decision ledger is the headline mechanism. So
+    `config.example/decisions.csv` carries one fictional verdict against one of
+    the twelve canned postings, and the demo's queue.md has to show it —
+    attached to a row that is still in the queue, never as a row that vanished.
+    """
+    out_dir = tmp_path / "out"
+    assert demo.main(["--out", str(out_dir)]) == 0
+    text = _queue_text(out_dir)
+    assert "| Prior |" in text
+    assert "already judged" in text
+    assert "Meridian Analytics" in text          # still in the queue, not hidden
