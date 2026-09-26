@@ -219,6 +219,40 @@ by the `.githooks` pre-commit hook and by CI.
    `EXPECTED_SURVIVOR_COUNT`/`EXPECTED_KILL_COUNT`, which exist precisely to make that a
    deliberate decision, and the row did not ask for it.
 
+## What the build changed about the design, and why
+
+Recorded here rather than left in commit messages, because a spec that only describes the
+plan is a document the next session cannot trust.
+
+6. **`fp_comp` requires BOTH a comp band and a benefits block, not either.** The plan said
+   "comp band + benefits block" and the first implementation treated either half as
+   sufficient. Running `tools/demo.py` immediately surfaced the consequence: two unrelated
+   fictional postings sharing a $130-150K band were flagged as reposts of each other. A
+   salary band is one of the most collision-prone facts a posting has, and nearly every
+   posting offers medical, dental and a 401k, so each half alone identifies nothing. A false
+   "possible repost" on a genuine posting is worse than no flag, so both are now required.
+   Caught by running the thing, not by reading it.
+
+7. **The three new rule keys differ in what an ABSENT key means, on purpose.**
+   `onsite_phrases` and `hybrid_phrases` fall back to the engine default when absent, because
+   they are generic bug-fix machinery and a config written before they existed should still
+   get the fix; `''` is the deliberate opt-out, the same shape as `commute_locations`.
+   `seniority` is OFF when absent, because a years floor is a personal preference like
+   `comp_floor` and there is no honest default to invent for someone who never stated one.
+   `config.example` spells all three out, and a test pins the two pattern keys equal to the
+   engine defaults so copying the example can never hand a user a WEAKER rule than not
+   copying it.
+
+8. **The same-day append carries the already-judged count on its heading.** A second run on
+   one day appends under `## Later run (same day)` and that block has no frontmatter, so the
+   count was missing from exactly the block a reader was looking at. Driven out by the
+   end-to-end judge test, which ran twice on one date.
+
+9. **`tests/test_row64_replay.py` is an acceptance test, written over behavior the unit
+   cycles had already driven out.** Its evidence is not a per-test red — it is that the whole
+   file goes red against the pre-change tree. Said in the file's own docstring so nobody
+   later mistakes it for a TDD cycle.
+
 ## Non-goals, named so they are not mistaken for omissions
 
 - **A prior `kill` verdict applies no score penalty and no re-ranking.** It attaches. The row
