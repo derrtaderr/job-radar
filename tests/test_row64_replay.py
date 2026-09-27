@@ -30,6 +30,7 @@ from engine.radar.config import load_config
 from engine.radar.ledger import Decision
 from engine.radar.pipeline import pipeline
 from engine.radar.report import render_report
+from tests.fixtures import as_scraped
 
 CFG = load_config(Path(__file__).parent.parent / "config.example")
 DAY_ONE = datetime.date(2026, 9, 21)
@@ -157,6 +158,20 @@ def test_miss_2_a_repost_is_flagged_and_never_suppressed():
                                                          str(DAY_FIVE))
 
 
+def test_miss_2_escapes_alone_do_not_stop_a_repost_from_matching():
+    # One board delivers the body with markdown escapes and another without. If
+    # the escapes reached the fingerprint, an original and its repost would differ
+    # by punctuation alone and the whole mechanism would go quiet on real data.
+    escaped = _posting("ln-6001", "Northwind Analytics", "Data Engineer",
+                       r"Own the reporting layer \- finance queries it daily. "
+                       + BENEFITS)
+    clean = _posting("ln-6002", "Northwind Analytics", "Data Engineer",
+                     "Own the reporting layer - finance queries it daily. " + BENEFITS)
+    _, _, state = pipeline(as_scraped([escaped]), {}, CFG, set(), DAY_ONE)
+    survivors, _, _ = pipeline(as_scraped([clean]), state, CFG, set(), DAY_FIVE)
+    assert survivors[0]["repost_of"] == "ln-6001"
+
+
 def test_miss_2_a_genuinely_different_posting_is_not_flagged():
     state = _day_one()
     other = _the_req(
@@ -210,6 +225,21 @@ def test_miss_4_a_fully_on_site_body_kills_against_a_remote_header():
                    "position. " + BENEFITS,
                    is_remote=True, location="")
     _, killed, _ = pipeline([row], {}, CFG, set(), DAY_FIVE)
+    assert "onsite-body" in _flags(killed[0])
+    assert "fully on-site" in dict(killed[0]["flags"])["onsite-body"]
+
+
+def test_miss_4_kills_on_the_shape_a_live_scrape_delivers():
+    # The same miss, in the wire shape: a live LinkedIn scrape hands back markdown
+    # with escaped punctuation, so the body reads "a fully on\-site position".
+    # Straight through the real scrape boundary and then the real pipeline, so this
+    # is the end-to-end claim rather than a unit assertion about clean prose.
+    raw = _posting("os-live", "Cindermill Tech", "Data Platform Engineer",
+                   r"Own our streaming architecture. This is a fully on\-site "
+                   r"position. Comp $150,000 \- $185,000. " + BENEFITS,
+                   is_remote=True, location="")
+    delivered = as_scraped([raw])
+    _, killed, _ = pipeline(delivered, {}, CFG, set(), DAY_FIVE)
     assert "onsite-body" in _flags(killed[0])
     assert "fully on-site" in dict(killed[0]["flags"])["onsite-body"]
 

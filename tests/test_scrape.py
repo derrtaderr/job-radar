@@ -208,3 +208,54 @@ class _FakeModule:
     def __init__(self, **attrs):
         for k, v in attrs.items():
             setattr(self, k, v)
+
+
+# --- markdown escapes (row 64 fix wave, blocker R64-01) ----------------------
+
+def test_unescapes_markdown_punctuation_in_the_description():
+    # A live LinkedIn scrape delivers `description` as markdown with escaped
+    # punctuation. Every kill pattern downstream is written against prose, so the
+    # escapes have to come off at the boundary — this is the single point that
+    # knows a description is markdown at all.
+    frame = _FakeFrame([{"id": "1", "description":
+                         r"This is a fully on\-site position. Comp $130,000 \- $150,000."}])
+    rows = scrape_mod._normalize_frame_rows([frame])
+    assert rows[0]["description"] == (
+        "This is a fully on-site position. Comp $130,000 - $150,000.")
+
+
+def test_unescapes_every_punctuation_class_jobspy_escapes():
+    frame = _FakeFrame([{"id": "1", "description":
+                         r"\- \* \. \( \) \# \_ \[ \] \+ \! \> \~ \| \{ \}"}])
+    rows = scrape_mod._normalize_frame_rows([frame])
+    assert rows[0]["description"] == "- * . ( ) # _ [ ] + ! > ~ | { }"
+
+
+def test_leaves_a_backslash_before_a_letter_alone():
+    # `\n` in a description is the two characters backslash-n, not a newline, and
+    # it is not a markdown escape. Stripping the backslash there would silently
+    # edit a Windows path or a regex quoted inside a posting.
+    frame = _FakeFrame([{"id": "1", "description": r"Use C:\new\table and \d+ syntax."}])
+    rows = scrape_mod._normalize_frame_rows([frame])
+    assert rows[0]["description"] == r"Use C:\new\table and \d+ syntax."
+
+
+def test_a_double_backslash_becomes_one():
+    frame = _FakeFrame([{"id": "1", "description": r"a \\ b"}])
+    rows = scrape_mod._normalize_frame_rows([frame])
+    assert rows[0]["description"] == r"a \ b"
+
+
+def test_a_missing_description_is_left_as_none():
+    frame = _FakeFrame([{"id": "1", "description": None}])
+    assert scrape_mod._normalize_frame_rows([frame])[0]["description"] is None
+
+
+def test_only_the_description_is_unescaped():
+    # Titles and locations are plain strings on the wire, not markdown. Touching
+    # them would be a second normalisation point with no reason to exist.
+    frame = _FakeFrame([{"id": "1", "title": r"Data Engineer \- Remote",
+                         "description": r"on\-site"}])
+    rows = scrape_mod._normalize_frame_rows([frame])
+    assert rows[0]["title"] == r"Data Engineer \- Remote"
+    assert rows[0]["description"] == "on-site"
