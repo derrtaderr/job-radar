@@ -200,18 +200,33 @@ def test_a_different_title_at_the_same_company_is_not_a_match():
 
 # --- matching: tier 3, the body fingerprint ---------------------------------
 
+# A body naming no employer, so a board that reposts it verbatim under its own
+# name produces an EQUAL body fingerprint. That is the repost tier 3 can honestly
+# carry a verdict across: same posting text, different employer field. A repost
+# whose PROSE was rewritten ("Our client, a mid-market analytics firm...") has no
+# verdict-inheritance path any more, by design — see the fp_comp note below.
+VERBATIM_BODY = ("Own the reporting layer our finance team queries daily. "
+                 "We offer medical, dental and a 401k match.")
+
+
+def _verbatim(jid, company, title):
+    return _row(id=jid, company=company, title=title, description=VERBATIM_BODY)
+
+
+def _state_for(row, jid):
+    return {jid: make_entry("2026-09-20", company=row["company"], title=row["title"],
+                            fp_comp=fp_comp(row), fp_body=fp_body(row))}
+
+
 def test_an_aggregator_repost_matches_through_the_body_fingerprint():
-    # The board reposts under its own name, so company and title both differ
-    # and tier 2 cannot fire. The earlier jid's fingerprints are in state, and
-    # that is what carries the verdict across.
-    original = _row(id="j1")
-    state = {"j1": make_entry("2026-09-20", company="Northwind Analytics",
-                             title="Data Engineer",
-                             fp_comp=fp_comp(original), fp_body=fp_body(original))}
+    # The board reposts the body verbatim under its own name, so company and title
+    # both differ and tier 2 cannot fire. The earlier jid's body fingerprint is in
+    # state, and that is what carries the verdict across.
+    original = _verbatim("j1", "Northwind Analytics", "Data Engineer")
+    state = _state_for(original, "j1")
     decisions, _ = parse_ledger(VALID)
 
-    repost = _row(id="agg-1", company="Talent Reach Staffing",
-                  title="Data Engineer (Client)")
+    repost = _verbatim("agg-1", "Talent Reach Staffing", "Data Engineer")
     match = prior_verdict(repost, decisions, state, jid="agg-1")
     assert match is not None
     assert match.verdict == "kill"
@@ -244,3 +259,83 @@ def test_dates_may_be_datetime_objects_when_appending(tmp_path):
         verdict="kill", reason="bi-analytics",
         date=datetime.date(2026, 9, 20), url=""))
     assert load_ledger(path)[0].date == "2026-09-20"
+
+
+# --- the newest decision wins, in every tier (R64-08) ------------------------
+#
+# A person changes their mind, and the ledger is append-only, so two rows for one
+# posting is the normal case rather than an error. Tier 1 happened to return the
+# LAST row and tiers 2 and 3 the FIRST, so the same posting reported "draft" when
+# it came back under its own id and "kill" when it came back reissued. Whichever
+# rule is right, they have to agree.
+#
+# The rule: the most recent decision wins, by date, with the later ROW winning a
+# tie — an append-only file's own order is the only tiebreak it has.
+
+TWICE = HEADER + "\n" + "\n".join([
+    "j1,Northwind Analytics,Data Engineer,kill,bi-analytics,2026-09-20,",
+    "j1,Northwind Analytics,Data Engineer,draft,reconsidered,2026-09-25,",
+]) + "\n"
+
+
+def test_tier_1_returns_the_newest_decision_for_that_jid():
+    decisions, _ = parse_ledger(TWICE)
+    assert prior_verdict(_row(id="j1"), decisions, {}, jid="j1").verdict == "draft"
+
+
+def test_tier_2_returns_the_newest_decision_for_that_company_and_title():
+    decisions, _ = parse_ledger(TWICE)
+    match = prior_verdict(_row(id="reissued"), decisions, {}, jid="reissued")
+    assert match.verdict == "draft"
+    assert match.reason == "reconsidered"
+
+
+def test_tier_3_returns_the_newest_decision_for_that_fingerprint():
+    original = _verbatim("j1", "Northwind Analytics", "Data Engineer")
+    state = _state_for(original, "j1")
+    decisions, _ = parse_ledger(TWICE)
+    repost = _verbatim("agg-1", "Talent Reach Staffing", "Data Engineer")
+    assert prior_verdict(repost, decisions, state, jid="agg-1").verdict == "draft"
+
+
+def test_every_tier_agrees_on_which_decision_is_current():
+    original = _verbatim("j1", "Northwind Analytics", "Data Engineer")
+    state = _state_for(original, "j1")
+    decisions, _ = parse_ledger(TWICE)
+    by_tier = [
+        prior_verdict(_row(id="j1"), decisions, state, jid="j1"),
+        prior_verdict(_row(id="new"), decisions, state, jid="new"),
+        prior_verdict(_verbatim("agg", "Talent Reach Staffing", "Data Engineer"),
+                      decisions, state, jid="agg"),
+    ]
+    assert {d.verdict for d in by_tier} == {"draft"}
+
+
+def test_the_newest_decision_wins_even_when_the_rows_are_out_of_order():
+    # Someone hand-edits the file, or two sessions append on different days and a
+    # sync reorders them. The DATE decides, not the position.
+    out_of_order = HEADER + "\n" + "\n".join([
+        "j1,Northwind Analytics,Data Engineer,draft,reconsidered,2026-09-25,",
+        "j1,Northwind Analytics,Data Engineer,kill,bi-analytics,2026-09-20,",
+    ]) + "\n"
+    decisions, _ = parse_ledger(out_of_order)
+    assert prior_verdict(_row(id="j1"), decisions, {}, jid="j1").verdict == "draft"
+
+
+def test_two_decisions_on_one_day_are_broken_by_row_order():
+    same_day = HEADER + "\n" + "\n".join([
+        "j1,Northwind Analytics,Data Engineer,kill,first-read,2026-09-25,",
+        "j1,Northwind Analytics,Data Engineer,draft,second-read,2026-09-25,",
+    ]) + "\n"
+    decisions, _ = parse_ledger(same_day)
+    assert prior_verdict(_row(id="j1"), decisions, {}, jid="j1").reason == "second-read"
+
+
+def test_an_unparseable_date_does_not_win_over_a_real_one():
+    # A hand-edited date must not silently become the newest decision.
+    odd = HEADER + "\n" + "\n".join([
+        "j1,Northwind Analytics,Data Engineer,kill,real-date,2026-09-25,",
+        "j1,Northwind Analytics,Data Engineer,draft,no-date,,",
+    ]) + "\n"
+    decisions, _ = parse_ledger(odd)
+    assert prior_verdict(_row(id="j1"), decisions, {}, jid="j1").reason == "real-date"

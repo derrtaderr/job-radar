@@ -117,9 +117,17 @@ def test_miss_1_the_judged_req_is_not_quietly_ranked_down_either():
 
 # --- miss 2: reposts and territory twins -------------------------------------
 
-def test_miss_2_an_aggregator_repost_is_flagged_and_carries_the_verdict():
-    # A job board reposts the same req under its own name with the client
-    # anonymised out of the prose. Company differs, URL differs, title differs.
+def test_miss_2_an_aggregator_repost_with_rewritten_prose_is_flagged_not_judged():
+    # A job board reposts the req under its own name AND rewrites the opening so
+    # the client is anonymous. Company, URL, title and prose all differ, so only
+    # the comp fingerprint can see it — and after R64-02 a comp match earns the
+    # FLAG and nothing more, because a band plus a common benefits set is shared by
+    # unrelated postings and must not speak for a person's judgment.
+    #
+    # The consequence, stated rather than hidden: a rewritten-prose repost of a
+    # judged req arrives flagged but unjudged. Carrying a verdict across it needs a
+    # tighter identity than either fingerprint has (title + band within a window),
+    # which the orchestrator recorded as a follow-up row rather than this wave.
     state = _day_one()
     repost = _the_req(
         "ln-3100", company="Talent Reach Staffing", title="Data Engineer (Client)",
@@ -129,6 +137,21 @@ def test_miss_2_an_aggregator_repost_is_flagged_and_carries_the_verdict():
     survivors, _, _ = pipeline([repost], state, CFG, set(), DAY_FIVE,
                                decisions=[THE_VERDICT])
 
+    assert survivors[0]["repost_of"] == "ln-1001"
+    assert survivors[0]["prior"] is None
+
+
+def test_miss_2_a_verbatim_repost_does_carry_the_verdict():
+    # The repost shape a verdict CAN travel across: the board republishes the body
+    # unchanged under its own employer name, so the body fingerprints agree.
+    verbatim = ("Own the reporting layer our finance team queries daily. Fully "
+                "remote (US). " + BENEFITS)
+    original = _the_req("ln-1001", description=verbatim)
+    _, _, state = pipeline([original], {}, CFG, set(), DAY_ONE)
+    repost = _the_req("ln-3200", company="Talent Reach Staffing",
+                      title="Data Engineer", description=verbatim)
+    survivors, _, _ = pipeline([repost], state, CFG, set(), DAY_FIVE,
+                               decisions=[THE_VERDICT])
     assert survivors[0]["repost_of"] == "ln-1001"
     assert survivors[0]["prior"].verdict == "kill"
 

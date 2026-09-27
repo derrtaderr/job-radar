@@ -25,10 +25,19 @@ body, a new id because the board reissued the req. So:
 
 Tier 2 is why a ledger row carries company and title even when `judge` was called
 with a jid alone.
+
+**The newest decision wins.** The file is append-only, a person changes their mind,
+and every tier picks the most recent matching row by date (later row breaks a tie).
+
+**Tier 3 matches on the BODY fingerprint only.** The comp fingerprint is a band
+plus a benefits set, which unrelated postings share; it is good enough to FLAG a
+possible repost for a human to look at, and not good enough to speak for their
+judgment about a company they have never seen.
 """
 from __future__ import annotations
 
 import csv
+import datetime
 import io
 import re
 from dataclasses import dataclass
@@ -149,31 +158,91 @@ def append_decision(path, decision: Decision) -> None:
         writer.writerow([str(getattr(decision, c) or "") for c in COLUMNS])
 
 
+def _recency_key(indexed):
+    """Sort key picking the CURRENT decision out of several for one posting.
+
+    The ledger is append-only and a person changes their mind, so two rows for one
+    posting is the normal case rather than an error. The newest wins, by date, with
+    the later ROW breaking a tie — an append-only file's own order is the only
+    tiebreak it has. A date that will not parse sorts oldest rather than newest: a
+    hand-edited or empty date must not silently become the current decision.
+    """
+    index, decision = indexed
+    try:
+        datetime.date.fromisoformat(decision.date[:10])
+        date = decision.date[:10]
+    except (ValueError, TypeError):
+        date = ""
+    return (date, index)
+
+
+def _newest(matches):
+    """The current decision among matches, or None when there are none."""
+    return max(matches, key=_recency_key)[1] if matches else None
+
+
+def current_decision_for(decisions, jid: str, company, title):
+    """The decision already on file for this posting by id or by name, or None.
+
+    Tiers 1 and 2 only — no fingerprints, because the caller is `judge`, which is
+    recording a decision about a posting a human is looking at rather than matching
+    a scraped row. Used to tell them what they are replacing: an append to an
+    append-only file looks identical to a no-op otherwise, and they have no way to
+    see the row that is about to stop being current.
+    """
+    indexed = list(enumerate(decisions))
+    if jid:
+        by_jid = [(i, d) for i, d in indexed if d.jid and d.jid == jid]
+        if by_jid:
+            return _newest(by_jid)
+    pair = (normalise_name(company), normalise_name(title))
+    if all(pair):
+        by_pair = [(i, d) for i, d in indexed
+                   if (normalise_name(d.company), normalise_name(d.title)) == pair]
+        if by_pair:
+            return _newest(by_pair)
+    return None
+
+
 def prior_verdict(row: dict, decisions, state, jid: str):
     """The decision this posting was already judged under, or None.
 
-    Tiers run cheapest-and-most-certain first, and every tier is exact within
-    itself — nothing here guesses. `state` supplies tier 3: the fingerprints
-    recorded against the jid the decision was written for.
+    Tiers run cheapest-and-most-certain first. Within a tier, several rows can
+    match one posting, and the NEWEST one is the answer in every tier — tier 1 used
+    to return the last row and tiers 2 and 3 the first, so one posting reported
+    "draft" when it came back under its own id and "kill" when it came back
+    reissued. Whichever rule is right, the tiers have to agree.
+
+    Tier 1 and tier 2 are exact within themselves. Tier 3 carries a verdict only on
+    `fp_body` equality — see the note there.
     """
     if not decisions:
         return None
+    indexed = list(enumerate(decisions))
 
-    by_jid = {d.jid: d for d in decisions if d.jid}
-    if jid in by_jid:
-        return by_jid[jid]
+    by_jid = [(i, d) for i, d in indexed if d.jid and d.jid == jid]
+    if by_jid:
+        return _newest(by_jid)
 
     pair = (normalise_name(row.get("company")), normalise_name(row.get("title")))
     if all(pair):
-        for d in decisions:
-            if (normalise_name(d.company), normalise_name(d.title)) == pair:
-                return d
+        by_pair = [(i, d) for i, d in indexed
+                   if (normalise_name(d.company), normalise_name(d.title)) == pair]
+        if by_pair:
+            return _newest(by_pair)
 
-    row_comp, row_body = fp_comp(row), fp_body(row)
-    for d in decisions:
+    # Tier 3 uses the BODY fingerprint only, never the comp one. A comp band plus
+    # the common medical/dental/vision/401k/PTO set is shared by unrelated
+    # postings, so inheriting a verdict through it told a person they had already
+    # killed a company they had never seen. The comp fingerprint still earns the
+    # `repost_of` FLAG in the pipeline, where a human reads it and decides; it is
+    # not enough to speak for their judgment.
+    row_body = fp_body(row)
+    by_body = []
+    for i, d in indexed:
         if not d.jid:
             continue
-        prior_comp, prior_body = fingerprints(state.get(d.jid))
-        if fp_equal(prior_body, row_body) or fp_equal(prior_comp, row_comp):
-            return d
-    return None
+        _, prior_body = fingerprints(state.get(d.jid))
+        if fp_equal(prior_body, row_body):
+            by_body.append((i, d))
+    return _newest(by_body)
