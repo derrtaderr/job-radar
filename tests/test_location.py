@@ -124,3 +124,72 @@ def test_the_shipped_commute_allowlist_still_behaves(cfg=CFG):
     assert "location" in _names(
         make_row(is_remote=False, location="Chicago, IL",
                  description="Build data pipelines."))
+
+
+# --- the allowlist is normalised too (R64-04) --------------------------------
+#
+# Normalising only the LOCATION broke the other side. A commute allowlist written
+# as a full state name — "Colorado" — used to substring-match "Denver, Colorado"
+# and stopped matching once the location normalised to `denver, co`. That silently
+# turned a commutable city into a location kill for anyone whose config named a
+# state rather than a city, which is a regression the row introduced rather than a
+# miss it set out to fix.
+#
+# So the allowlist's own entries go through `normalise_location` before matching,
+# and all three shapes a person actually writes have to keep working.
+
+def test_an_allowlist_written_as_a_full_state_name_matches_that_state():
+    pattern = re.compile("Colorado", re.I)
+    assert pattern_matches_location(pattern, "Denver, Colorado")
+    assert pattern_matches_location(pattern, "Denver, CO")
+    assert pattern_matches_location(pattern, "Boulder, Colorado, United States")
+
+
+def test_an_allowlist_written_as_an_abbreviation_still_matches():
+    pattern = re.compile("CO", re.I)
+    assert pattern_matches_location(pattern, "Denver, CO")
+    assert pattern_matches_location(pattern, "Denver, Colorado")
+
+
+def test_an_allowlist_written_as_a_city_still_matches():
+    pattern = re.compile("Denver|Boulder", re.I)
+    assert pattern_matches_location(pattern, "Denver, CO")
+    assert pattern_matches_location(pattern, "Boulder, Colorado")
+    assert not pattern_matches_location(pattern, "Chicago, IL")
+
+
+def test_a_multi_word_state_name_in_an_allowlist_matches():
+    pattern = re.compile("New Jersey", re.I)
+    assert pattern_matches_location(pattern, "Newark, New Jersey")
+    assert pattern_matches_location(pattern, "Newark, NJ")
+
+
+def test_an_alternation_mixing_a_city_and_a_state_name_matches_both():
+    pattern = re.compile("Denver|Colorado", re.I)
+    assert pattern_matches_location(pattern, "Denver, CO")
+    assert pattern_matches_location(pattern, "Fort Collins, Colorado")
+    assert not pattern_matches_location(pattern, "Chicago, IL")
+
+
+def test_normalising_the_allowlist_does_not_reopen_the_substring_bug():
+    # The whole point of R64-03's fix. `NY` must still not match Pennsylvania.
+    pattern = re.compile("NY", re.I)
+    assert pattern_matches_location(pattern, "New York, United States")
+    assert not pattern_matches_location(pattern, "Pennsylvania, United States")
+
+
+def test_a_pattern_using_real_regex_syntax_is_left_alone():
+    # A pattern with metacharacters cannot be split into entries and normalised
+    # without changing what it means, so it is matched as written. Naming the
+    # limit beats silently mangling someone's regex.
+    pattern = re.compile(r"Denver|Bould\w+", re.I)
+    assert pattern_matches_location(pattern, "Boulder, CO")
+    assert pattern_matches_location(pattern, "Denver, CO")
+
+
+def test_a_full_state_name_allowlist_no_longer_kills_a_city_in_that_state():
+    cfg = dataclasses.replace(CFG, commute_pattern=re.compile("Colorado", re.I))
+    for spelling in ("Denver, Colorado", "Denver, CO", "Boulder, Colorado"):
+        row = make_row(is_remote=False, location=spelling,
+                       description="Build data pipelines.")
+        assert "location" not in _names(row, cfg), spelling
