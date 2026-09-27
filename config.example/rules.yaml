@@ -36,6 +36,9 @@ hybrid_phrases: '\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b|\bhybrid\b|in[
 # above stretch_years flags as `seniority-stretch` and costs nothing. NEITHER
 # ever kills — a band is a weak claim about a req, and the failure it fixes was
 # a junior posting RANKING second, not a junior posting being visible.
+# A number of years only counts in an EXPERIENCE context ("5 years of experience",
+# "5 years in data engineering"), never "vests after 1 year" or "founded 12 years
+# ago". When a posting states several, the LARGEST is the role's own requirement.
 # Remove the block entirely and both checks are off; there is no default floor.
 seniority:
   min_years: 5

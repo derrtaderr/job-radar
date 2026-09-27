@@ -353,13 +353,33 @@ def kill_flags(row: dict, cfg) -> list:
 # constantly — and the miss was a ranking failure, not a visibility one. So the
 # floor costs points and the stretch costs nothing, and neither one ever kills.
 _YEARS = r"(?:years?|yrs?)"
+
+# A number of years only states a seniority floor when it sits in an EXPERIENCE
+# context (R64-07). Without this requirement the rule read a 401(k) vesting
+# schedule ("vests after 1 year of service"), a founding date ("Founded 12 years
+# ago"), a growth anecdote ("over the past 2 years our team grew 3x") and a
+# sabbatical policy as stated floors, and each one cost a realistic posting 15
+# points. A rule that fires on a benefits paragraph is not a seniority rule.
+#
+# What counts as experience context is the vocabulary postings actually use for a
+# requirement: "years of experience", "years' experience", "years in <field>",
+# "years working/building/leading", "years as a <role>". Deliberately NOT "years
+# of service", "years ago", or a bare "N years" followed by nothing.
+_EXPERIENCE_CONTEXT = (
+    r"(?:\s*(?:'|’)?s?\s*(?:of\s+)?"
+    r"(?:relevant\s+|professional\s+|industry\s+|hands[- ]on\s+|direct\s+|"
+    r"combined\s+|total\s+|overall\s+)*experience"
+    r"|\s+(?:in|within|across|working|building|leading|managing|owning|as)\b)"
+)
+
 # Alternations ordered most specific first, so "1-4 years" is read as a band
 # rather than as the bare "4 years" the last alternation would find.
 _BAND = re.compile("|".join((
-    r"(\d{1,2})\s*(?:-|–|—|to)\s*\d{1,2}\+?\s*" + _YEARS,
-    r"(?:at least|minimum of|min\.? of)\s*(\d{1,2})\+?\s*" + _YEARS,
-    r"(\d{1,2})\+\s*" + _YEARS,
-    r"(\d{1,2})\s*" + _YEARS,
+    r"(\d{1,2})\s*(?:-|–|—|to)\s*\d{1,2}\+?\s*" + _YEARS + _EXPERIENCE_CONTEXT,
+    r"(?:at least|minimum of|min\.? of)\s*(\d{1,2})\+?\s*" + _YEARS + _EXPERIENCE_CONTEXT,
+    r"experience:?\s*(\d{1,2})\+?\s*" + _YEARS,
+    r"(\d{1,2})\+\s*" + _YEARS + _EXPERIENCE_CONTEXT,
+    r"(\d{1,2})\s*" + _YEARS + _EXPERIENCE_CONTEXT,
 )), re.I)
 
 # Phrase floors — a posting that says "early in their career" has stated a floor
@@ -372,11 +392,16 @@ _PHRASE_FLOOR = re.compile(
 
 
 def experience_signals(text) -> list:
-    """Every stated experience floor in a body, as (low_years, match) pairs.
+    """Every NUMERIC experience floor in a body, as (low_years, match) pairs.
 
-    The LOW end of each band is what a floor check needs — "1-4 years" is a
-    junior req whatever its upper bound is. A phrase floor ("entry level")
-    contributes a low of 0, because that is what the phrase means.
+    The LOW end of each band is what a floor check needs — "1-4 years of
+    experience" is a junior req whatever its upper bound is.
+
+    Phrase floors are NOT in here; they come back from `phrase_floor` separately,
+    because they are a different kind of claim. A phrase states a floor without
+    stating a number, so folding it in as a zero would let it be out-voted by a
+    numeric band elsewhere in the document — and "this is an entry level role" is
+    not out-voted by a sentence about the founder's twelve years in the industry.
     """
     body = str(text or "")
     signals = []
@@ -384,9 +409,13 @@ def experience_signals(text) -> list:
         low = next((g for g in m.groups() if g), None)
         if low is not None:
             signals.append((int(low), m))
-    for m in _PHRASE_FLOOR.finditer(body):
-        signals.append((0, m))
     return signals
+
+
+def phrase_floor(text):
+    """The match for a stated-without-a-number floor ("entry level", "new grad",
+    "early in their career"), or None."""
+    return _PHRASE_FLOOR.search(str(text or ""))
 
 
 def seniority_notes(row: dict, cfg) -> list:
@@ -403,17 +432,24 @@ def seniority_notes(row: dict, cfg) -> list:
 
     text = str(row.get("description") or "")
     signals = experience_signals(text)
-    if not signals:
-        return []
-
     notes = []
-    lowest, lowest_match = min(signals, key=lambda s: s[0])
-    if lowest < seniority["min_years"]:
-        notes.append(("junior-band", evidence(lowest_match, text)))
 
-    highest, highest_match = max(signals, key=lambda s: s[0])
-    if highest >= seniority["stretch_years"]:
-        notes.append(("seniority-stretch", evidence(highest_match, text)))
+    if signals:
+        # The LARGEST stated floor is the role's requirement. A posting that asks
+        # for "3 years focused on HubSpot and 7+ years in GTM engineering" is a
+        # seven-year role with a three-year requirement for one tool inside it;
+        # taking the smallest number would read every sub-skill line as the role's
+        # own floor, which is how a senior req scored as junior on real data.
+        band, band_match = max(signals, key=lambda s: s[0])
+        if band < seniority["min_years"]:
+            notes.append(("junior-band", evidence(band_match, text)))
+        elif band >= seniority["stretch_years"]:
+            notes.append(("seniority-stretch", evidence(band_match, text)))
+
+    if not any(name == "junior-band" for name, _ in notes):
+        phrase = phrase_floor(text)
+        if phrase:
+            notes.append(("junior-band", evidence(phrase, text)))
     return notes
 
 

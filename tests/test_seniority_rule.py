@@ -157,3 +157,81 @@ def test_a_non_integer_seniority_value_names_the_key(tmp_path):
             tmp_path,
             "comp_floor: 120000\nseniority: {min_years: yes, penalty: 15, "
             "stretch_years: 10}\nrules: []\n")
+
+
+# --- years that are not experience (R64-07) ----------------------------------
+#
+# The band's last alternation matched a bare `\d+ years?`, so it read any number
+# of years in a posting as a stated floor. On realistic bodies that meant a 401(k)
+# vesting schedule, a company's founding date, a growth anecdote and a sabbatical
+# policy each cost a posting 15 points. A rule that fires on a benefits paragraph
+# is not a seniority rule.
+#
+# The fix is to require an experience context around the number. "3 years focused
+# on HubSpot" is a sub-skill floor and not the role's requirement; "7+ years in GTM
+# engineering" is.
+
+NOT_EXPERIENCE = (
+    "401(k) match vests after 1 year of service.",
+    "Founded 12 years ago, we now serve 300 customers.",
+    "Over the past 2 years our team grew 3x.",
+    "We offer 20 days PTO and a 1 year sabbatical after 5 years.",
+    "Our Series B closed 4 years ago.",
+    "This role reports to a director with 2 direct reports.",
+)
+
+
+def test_a_year_that_is_not_experience_is_not_a_floor():
+    for text in NOT_EXPERIENCE:
+        assert _notes(CLEAN + " " + text) == {}, text
+
+
+def test_a_year_that_is_not_experience_costs_no_points():
+    clean = make_row(description=CLEAN)
+    for text in NOT_EXPERIENCE:
+        row = make_row(description=CLEAN + " " + text)
+        assert score(row, TODAY, CFG) == score(clean, TODAY, CFG), text
+
+
+def test_a_founding_date_is_not_a_seniority_stretch():
+    # It used to flag `seniority-stretch` off "Founded 12 years ago".
+    assert "seniority-stretch" not in _notes(
+        CLEAN + " Founded 12 years ago, we now serve 300 customers.")
+
+
+def test_a_sub_skill_floor_does_not_set_the_role_band():
+    # The real posting: 3 years on one tool, 7+ overall. The ROLE is a 7-year role.
+    notes = _notes(CLEAN + " Requires at least 3 years focused on HubSpot and "
+                           "7+ years in GTM engineering overall.")
+    assert "junior-band" not in notes
+
+
+def test_the_largest_stated_floor_is_the_role_band():
+    # Two bands that both carry an experience context: the larger is the role's
+    # requirement and the smaller is a requirement for one skill inside it.
+    notes = _notes(CLEAN + " You have 2 years of experience with dbt and 8+ years "
+                           "of experience in data engineering.")
+    assert "junior-band" not in notes
+
+
+def test_the_experience_contexts_a_posting_actually_writes_are_all_read():
+    for text, junior in (
+        ("We want 1-4 years of relevant experience.", True),
+        ("2-4 years' experience required.", True),
+        ("3 years in a similar role.", True),
+        ("2 years working on production pipelines.", True),
+        ("Experience: 1+ years.", True),
+        ("8+ years of experience required.", False),
+        ("At least 6 years of professional experience.", False),
+        ("7 years in data engineering.", False),
+    ):
+        notes = _notes(CLEAN + " " + text)
+        assert ("junior-band" in notes) is junior, (text, notes)
+
+
+def test_a_phrase_floor_still_flags_on_its_own():
+    # "early in their career" states a floor without stating a number, so it must
+    # not depend on the numeric path at all.
+    assert "junior-band" in _notes(CLEAN + " Ideal for someone early in their career.")
+    assert "junior-band" in _notes(
+        CLEAN + " Founded 12 years ago. This is an entry level role.")
