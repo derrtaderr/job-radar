@@ -18,7 +18,7 @@ from pathlib import Path
 
 from engine.radar.config import load_config
 from engine.radar.rules_engine import kill_flags
-from tests.fixtures import make_row
+from tests.fixtures import make_row, scraped_row
 
 EXAMPLE = Path(__file__).parent.parent / "config.example"
 CFG = load_config(EXAMPLE)        # commute_locations: Denver|Boulder
@@ -67,6 +67,31 @@ def test_a_hyphenless_spelling_still_kills():
     row = make_row(is_remote=True, location="",
                    description="Own the platform. This is a fully onsite position.")
     assert "onsite-body" in _flags(row)
+
+
+# --- the live wire shape (R64-01) ---------------------------------------------
+
+def test_the_rule_fires_on_the_shape_a_live_scrape_actually_delivers():
+    # THE blocker. A live LinkedIn scrape delivers markdown with escaped
+    # punctuation, so the body reads "a fully on\-site position" and every
+    # hyphen-bearing pattern in the kill path missed it. The rule returned no
+    # flags on real data while passing every prose fixture in this file.
+    row = scraped_row(is_remote=True, location="",
+                      description=r"Own the platform. This is a fully on\-site position.")
+    assert "onsite-body" in _flags(row)
+
+
+def test_an_escaped_in_office_day_count_still_kills():
+    row = scraped_row(is_remote=True, location="",
+                      description=r"Own it. You will be in\-office 4 days per week.")
+    assert "onsite-body" in _flags(row)
+
+
+def test_an_escaped_comp_band_still_reads_as_a_band():
+    # The same escapes reach the comp rule: "$95,000 \- $110,000".
+    row = scraped_row(is_remote=True, location="", max_amount=None, min_amount=None,
+                      description=r"Salary range for this role is $95,000 \- $110,000.")
+    assert "comp-below-floor-stated" in _flags(row)
 
 
 # --- what it must not do ------------------------------------------------------

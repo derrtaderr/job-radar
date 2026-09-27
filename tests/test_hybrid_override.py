@@ -16,7 +16,7 @@ from pathlib import Path
 
 from engine.radar.config import load_config
 from engine.radar.rules_engine import jd_says_remote, kill_flags
-from tests.fixtures import make_row
+from tests.fixtures import make_row, scraped_row
 
 EXAMPLE = Path(__file__).parent.parent / "config.example"
 CFG = load_config(EXAMPLE)        # commute_locations: Denver|Boulder
@@ -90,6 +90,37 @@ def test_a_rejected_match_does_not_end_the_walk():
 def test_a_negated_remote_mention_still_does_not_rescue():
     row = _elsewhere("This is not a remote position.")
     assert "location" in _names(row)
+
+
+# --- the live wire shape (R64-01) ---------------------------------------------
+
+def _elsewhere_scraped(description):
+    return scraped_row(is_remote=False, location="Chicago, IL", description=description)
+
+
+def test_escaped_in_office_cadence_still_defeats_the_override():
+    row = _elsewhere_scraped(
+        r"Fully flexible. You will be in\-office 3 days a week with the team.")
+    assert "location" in _names(row)
+
+
+def test_an_escaped_hybrid_sentence_still_defeats_the_override():
+    row = _elsewhere_scraped(
+        r"We are hybrid\-first, and you can work from home on Fridays.")
+    assert "location" in _names(row)
+
+
+def test_an_escaped_remote_first_claim_still_overrides():
+    # The other direction: the escapes must not stop a genuine remote claim from
+    # being read either.
+    #
+    # Phrased WITHOUT the word "no", deliberately. "remote-first, with no office
+    # requirement" reads as negated by the `_NEG` window, which scans to the end
+    # of the sentence after a match — a pre-existing false negative in the
+    # untightened override (it behaves identically on the pre-change tree),
+    # unrelated to markdown escapes and not this wave's to change.
+    row = _elsewhere_scraped(r"This role is remote\-first and the team is distributed.")
+    assert "location" not in _names(row)
 
 
 # --- config-driven ------------------------------------------------------------

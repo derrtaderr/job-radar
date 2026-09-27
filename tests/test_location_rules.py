@@ -1,7 +1,7 @@
 from pathlib import Path
 from engine.radar.config import load_config
 from engine.radar.rules_engine import kill_flags, body_location
-from tests.fixtures import make_row
+from tests.fixtures import make_row, scraped_row
 
 CFG = load_config(Path(__file__).parent.parent / "config.example")  # commute: Denver|Boulder
 
@@ -77,3 +77,26 @@ def test_jd_says_remote_skips_negated_mentions():
 def test_jd_says_remote_on_silent_jd():
     from engine.radar.rules_engine import jd_says_remote
     assert jd_says_remote("We build data pipelines in Denver.") is None
+
+
+# --- the live wire shape (row 64 fix wave, R64-01) ---------------------------
+# A live scrape delivers markdown, so every hyphen-bearing pattern here — the
+# remote override's `remote[- ]first` / `remote[- ]eligible` included — sees
+# `remote\-first` on real data unless the boundary unescapes it.
+
+def test_escaped_remote_first_overrides_a_structured_location():
+    row = scraped_row(is_remote=False, location="Chicago, IL",
+                      description=r"We are remote\-first and always have been.")
+    assert "location" not in _names(row)
+
+
+def test_escaped_remote_eligible_overrides_a_structured_location():
+    row = scraped_row(is_remote=False, location="Chicago, IL",
+                      description=r"This role is remote\-eligible across the US.")
+    assert "location" not in _names(row)
+
+
+def test_an_escaped_negated_remote_mention_still_does_not_rescue():
+    row = scraped_row(is_remote=False, location="Chicago, IL",
+                      description=r"This is not a remote\-first company.")
+    assert "location" in _names(row)
