@@ -16,15 +16,40 @@ _MONEY = re.compile(r"\$?\s?(\d{2,3})(?:,(\d{3}))?\s?(k\b)?", re.I)
 
 # Ported verbatim from OLD/rules.py (lines 55-78) — generic engine constants for
 # detecting affirmative remote language in a JD while skipping negated mentions.
-_REMOTE_OK = re.compile(
-    r"fully remote|100 ?% remote|remote[- ]first|remote[- ]friendly|remote[- ]eligible"
+# Split in two, because the two halves carry different weight and the tightened
+# override has to tell them apart (R64-05).
+#
+# STRONG is a claim about THE ROLE: "fully remote", "remote-first", "remote
+# position". A posting that says one of these and then mentions an office in the
+# same breath is a remote role with an office, which is ordinary.
+#
+# WEAK is a mention of remote work without claiming the role is remote: "work from
+# home", "working remotely", "#li-remote". This is exactly the vocabulary a HYBRID
+# posting uses when it lists which days are which — "Tuesdays and Fridays are
+# remote/work from home days" — so a weak mention is the one that loses to hybrid
+# phrasing beside it.
+_REMOTE_STRONG = re.compile(
+    r"fully remote|100 ?% remote|remote[- ]first|remote[- ]eligible"
+    r"|fully distributed"
     r"|remote (?:position|role|opportunity|job)"
-    r"|work from home|work from anywhere|work(?:ing)? remotely"
-    r"|#li[- ]remote"
+    r"|work from anywhere"
     r"|remote \((?:us|usa|united states|anywhere)"
     r"|(?:us|u\.s\.|usa)[- ]remote"
-    r"|remote,? (?:us\b|usa\b|united states)"
+    r"|remote,? (?:us\b|usa\b|united states)", re.I)
+
+_REMOTE_WEAK = re.compile(
+    r"remote[- ]friendly"
+    r"|work from home|work(?:ing)? remotely"
+    r"|#li[- ]remote"
     r"|open to remote", re.I)
+
+# The union, kept as one name for the untightened detector the calibrator uses.
+_REMOTE_OK = re.compile(_REMOTE_STRONG.pattern + "|" + _REMOTE_WEAK.pattern, re.I)
+
+# Any mention of remote work at all, however weak. Used to spot a posting that is
+# OFFERING remote as one of several options ("remote, hybrid, or on-site") rather
+# than describing an on-site role (R64-06).
+_ANY_REMOTE = re.compile(r"\bremote\b|\bwork from home\b|\bwork from anywhere\b", re.I)
 
 _NEG = re.compile(r"\b(?:not|no|isn'?t|never)\b", re.I)
 
@@ -38,9 +63,12 @@ _NEG = re.compile(r"\b(?:not|no|isn'?t|never)\b", re.I)
 DEFAULT_HYBRID_PHRASES = (
     r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b"
     r"|\bhybrid\b"
-    r"|\d+ days?"
     r"|in[- ](?:the |our )?office"
     r"|on-?site"
+    r"|\d+ days? (?:a |per )?week (?:in|at|on)"
+    r"|in (?:the |our )?office \d+ days?"
+    r"|in[- ]office \d+ days?"
+    r"|(?:work|working) from home \d+ days?"
 )
 
 _SENTENCE_END = re.compile(r"[.!?\n]")
@@ -91,10 +119,20 @@ def _unnegated(pattern, text, reject_in_sentence=None):
 
 
 def _jd_says_remote(text, hybrid_pattern=None):
-    """Affirmative remote language in the JD, skipping negated mentions and — when
-    `hybrid_pattern` is given — mentions whose own sentence names in-office days
-    or hybrid phrasing."""
-    return _unnegated(_REMOTE_OK, text, reject_in_sentence=hybrid_pattern)
+    """Affirmative remote language in the JD, skipping negated mentions.
+
+    When `hybrid_pattern` is given, a STRONG claim about the role wins over any
+    hybrid or on-site token sitting beside it, and only a WEAK mention is rejected
+    for its sentence's phrasing. Without that split the tightening killed
+    genuinely remote postings the untightened override had passed — "fully remote
+    role with 25 days of PTO", "fully remote, with an optional desk in our
+    office", "remote-first; occasional on-site offsites". Fixing miss 5 by killing
+    remote roles is a worse outcome than miss 5.
+    """
+    strong = _unnegated(_REMOTE_STRONG, text)
+    if strong:
+        return strong
+    return _unnegated(_REMOTE_WEAK, text, reject_in_sentence=hybrid_pattern)
 
 
 def jd_says_remote(text, hybrid_pattern=None):
@@ -127,6 +165,22 @@ _OFFICE_CADENCE = re.compile(
     r"\d+ days? (?:a |per )?week in (?:the |our )?office|days? in[- ]office"
     r"|hybrid (?:schedule|work model|role)|in[- ]office \d+ days?"
     r"|work from home [A-Z][a-z]+days", re.I)
+
+# The limit of "a strong claim wins" (R64-05). A posting can say "fully remote"
+# and then require three days in the office; the requirement is the real term of
+# the role, and letting the claim win there would hand back a hybrid job as a
+# remote one. So a MANDATORY cadence — a day count tied to an office — still
+# defeats the override document-wide.
+#
+# Narrower than _OFFICE_CADENCE on purpose: that pattern also matches "hybrid
+# schedule", which appears in "Fully remote. Hybrid schedules are available for
+# those who want them" — an option offered, not a term imposed.
+_MANDATORY_CADENCE = re.compile(
+    r"\d+ days? (?:a |per )?week (?:in|at) (?:the |our )?office"
+    r"|in (?:the |our )?office \d+ days?"
+    r"|in[- ]office \d+ days?"
+    r"|\d+ days? in[- ]office"
+    r"|\d+ days? (?:a |per )?week on-?site", re.I)
 
 
 # Row 64, rule type C2: the mirror of _REMOTE_OK. Body language that describes
@@ -197,6 +251,34 @@ def evidence(match, text: str) -> str:
     return text[start:end].replace("\n", " ").strip()
 
 
+def _onsite_says(text, pattern):
+    """On-site language describing THIS role, or None.
+
+    Two rejections, not one. A negated mention ("this is not an on-site role") is
+    skipped by the shared negation window, as everywhere else. And a match whose
+    own sentence carries an unnegated mention of remote work is skipped too,
+    because a posting that says "remote, hybrid, or on-site positions" is
+    describing a CHOICE rather than an on-site role — and the choice includes what
+    the reader wants (R64-06).
+
+    A DENIED remote mention does not rescue it: "this role is not remote; it is a
+    fully on-site position" is a statement of the terms, not an option, which is
+    why the sentence check goes through `_unnegated` rather than a bare search.
+    """
+    if not pattern:
+        return None
+    for m in pattern.finditer(text):
+        before = text[max(0, m.start() - 30):m.start()]
+        after = text[m.end():m.end() + 30].split(".")[0]
+        if _NEG.search(before) or _NEG.search(after):
+            continue
+        sentence = _sentence_around(text, m.start(), m.end())
+        if _unnegated(_ANY_REMOTE, sentence):
+            continue
+        return evidence(m, text)
+    return None
+
+
 def title_passes(title: Optional[str], cfg) -> bool:
     t = title or ""
     return bool(cfg.title_keep.search(t)) and not cfg.title_drop.search(t)
@@ -243,7 +325,7 @@ def kill_flags(row: dict, cfg) -> list:
     # this: an on-site role in a city the user can actually commute to is a role
     # they want, and killing it would be the opposite of the miss being fixed.
     if not commute_matches:
-        onsite_evidence = _unnegated(cfg.onsite_pattern, text)
+        onsite_evidence = _onsite_says(text, cfg.onsite_pattern)
         if onsite_evidence:
             flags.append(("onsite-body", onsite_evidence))
 
@@ -251,7 +333,7 @@ def kill_flags(row: dict, cfg) -> list:
         if effective_location:
             if not commute_matches:
                 override = (_jd_says_remote(text, cfg.hybrid_pattern)
-                            and not _OFFICE_CADENCE.search(text))
+                            and not _MANDATORY_CADENCE.search(text))
                 if not override:
                     loc_evidence = structured_location if structured_location else evidence(body_match, text)
                     flags.append(("location", loc_evidence))

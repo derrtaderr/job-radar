@@ -168,3 +168,69 @@ def test_jd_says_remote_is_untightened_unless_a_hybrid_pattern_is_passed():
     hybrid_text = "Tuesdays and Fridays are remote/work from home days."
     assert jd_says_remote(hybrid_text) is not None
     assert jd_says_remote(hybrid_text, CFG.hybrid_pattern) is None
+
+
+# --- the tightening must not over-fire (R64-05) ------------------------------
+#
+# The sentence-scoped rejection went too wide. Its default treated a bare
+# `\d+ days?`, a bare "office" mention and a bare "on-site" as hybrid phrasing, so
+# genuinely remote postings started failing the override and taking a location
+# kill — postings the UNTIGHTENED override had passed. Fixing miss 5 by killing
+# remote roles is a worse outcome than miss 5.
+#
+# The rule that separates them: an affirmative remote claim about the ROLE ("fully
+# remote", "remote-first", "100% remote") in the same sentence wins over any
+# hybrid or on-site token beside it. A weak mention ("work from home", "working
+# remotely") does not — that is exactly the phrasing hybrid postings use when they
+# list which days are which.
+
+REMOTE_BUT_MENTIONS_AN_OFFICE = (
+    "Fully remote role with 25 days of PTO and a home office stipend.",
+    "This role is fully remote, with an optional desk in our office for anyone "
+    "who wants one.",
+    "We are remote-first; occasional on-site offsites twice a year.",
+    "Fully remote. Hybrid schedules are available for those who want them.",
+)
+
+
+def test_a_strong_remote_claim_survives_a_hybrid_token_beside_it():
+    for text in REMOTE_BUT_MENTIONS_AN_OFFICE:
+        assert "location" not in _names(_elsewhere(text)), text
+
+
+def test_a_strong_remote_claim_is_still_read_as_remote_language():
+    for text in REMOTE_BUT_MENTIONS_AN_OFFICE:
+        assert jd_says_remote(text, CFG.hybrid_pattern) is not None, text
+
+
+def test_a_day_count_not_tied_to_an_office_is_not_hybrid_phrasing():
+    # "25 days of PTO" is a benefit. A bare day count says nothing about where
+    # the work happens.
+    assert "location" not in _names(_elsewhere(
+        "This is a fully remote position. We offer 25 days of paid leave."))
+
+
+def test_a_weak_remote_mention_beside_a_hybrid_token_still_loses():
+    # The other side of the same rule, and the case miss 5 actually was: no
+    # role-scoped claim anywhere, just which days are which.
+    assert "location" in _names(_elsewhere(
+        "Tuesdays and Fridays are remote/work from home days."))
+    assert "location" in _names(_elsewhere(
+        "You will work from home 2 days a week."))
+
+
+def test_a_mandatory_office_cadence_still_defeats_a_strong_claim():
+    # The limit of "the strong claim wins". A posting can say "fully remote" and
+    # then require three days in the office; the requirement is the real term, and
+    # letting the claim win there would hand back a hybrid role as remote.
+    assert "location" in _names(_elsewhere(
+        "Fully remote (US). You will be in the office 3 days a week."))
+    assert "location" in _names(_elsewhere(
+        "This is a fully remote role. Expect to be in-office 4 days per week."))
+
+
+def test_an_optional_hybrid_offer_does_not_defeat_a_strong_claim():
+    # "available for those who want them" is an option, not a term of the role —
+    # which is what separates it from the cadence case above.
+    assert "location" not in _names(_elsewhere(
+        "Fully remote. Hybrid schedules are available for those who want them."))
