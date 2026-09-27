@@ -189,3 +189,54 @@ def test_a_bad_onsite_regex_names_the_key(tmp_path):
     from engine.radar.config import ConfigError
     with pytest.raises(ConfigError, match="onsite_phrases"):
         _rules_variant(tmp_path, "comp_floor: 120000\nonsite_phrases: '('\nrules: []\n")
+
+
+# --- the on-site rule must not over-fire (R64-06) ----------------------------
+#
+# The default matched `on-?site (?:position|role|...)` anywhere in the body, so a
+# posting OFFERING remote as one of several options was killed as an on-site role.
+# A posting that says "remote, hybrid, or on-site" is not describing an on-site
+# role; it is describing a choice, and the choice includes what the reader wants.
+
+def test_a_list_of_options_including_remote_is_not_an_on_site_role():
+    for text in ("We offer remote, hybrid, or on-site positions depending on "
+                 "your preference.",
+                 "Candidates may choose an on-site role in Denver or fully remote.",
+                 "This can be an on-site position or fully remote, your call."):
+        row = make_row(is_remote=True, location="", description=text)
+        assert "onsite-body" not in _flags(row), text
+
+
+def test_a_same_sentence_remote_denial_suppresses_the_kill_a_known_limitation():
+    # Pinned as the behavior it is, not as the behavior anyone wanted.
+    #
+    # "This role is not remote; it is a fully on-site position" does NOT kill, and
+    # the cause is upstream of this rule: `_NEG` scans a fixed 30-character window
+    # before a match and to the end of the sentence after it, and it cannot tell
+    # which phrase the "not" attaches to. Here the "not" belongs to "remote" and
+    # the window reads it as negating "on-site". The same window behaves the same
+    # way for the remote override and has since Phase 1.
+    #
+    # Left alone deliberately: widening or clause-splitting `_NEG` changes how
+    # every kill in this engine reads a negation, which is not a change to make
+    # inside a scoped fix wave. The failure direction is safe — a posting stays in
+    # the queue — and the row is still in front of the human.
+    row = make_row(is_remote=True, location="",
+                   description="This role is not remote; it is a fully on-site position.")
+    assert "onsite-body" not in _flags(row)
+
+
+def test_a_definite_on_site_role_kills_when_the_denial_is_its_own_sentence():
+    # The same posting, punctuated so the windows do not collide. This is the
+    # discriminator that matters: a denial of remote is not an offer of remote.
+    row = make_row(is_remote=True, location="",
+                   description="Remote work is not something we offer here. "
+                               "This is a fully on-site position.")
+    assert "onsite-body" in _flags(row)
+
+
+def test_a_remote_mention_in_a_different_sentence_does_not_rescue_it():
+    row = make_row(is_remote=True, location="",
+                   description="We have remote roles on other teams. This one is "
+                               "a fully on-site position.")
+    assert "onsite-body" in _flags(row)

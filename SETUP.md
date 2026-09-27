@@ -150,8 +150,8 @@ drops are the quiet ones, so keep `title_drop` narrow.
 |---|---|---|
 | `comp_floor` | int, required | A posting whose posted yearly max is below this is killed as `comp-below-floor`. With no structured comp, the body is scanned for a stated range near salary language; below the floor kills as `comp-below-floor-stated`. |
 | `commute_locations` | regex or empty | Non-remote postings whose location matches still pass. Empty (or absent) means remote-only. Matched against the NORMALISED location, with your own entries normalised the same way, and only on word boundaries. So `NY` matches "New York, United States", "New York, NY" and "NY" alike and does not match the `ny` inside "Pennsylvania"; `Colorado`, `CO` and `Denver` all match "Denver, Colorado"; and `Denver` still matches "Denver Tech Center, CO". A pattern using real regex syntax (a character class, a quantifier) is matched as written rather than normalised, since its entries cannot be separated without changing what it means. |
-| `onsite_phrases` | regex, optional | Body language that means the role is on-site, killing as `onsite-body` with the line quoted, **even when the header says the role is remote**. A location matching `commute_locations` wins over it. Negated mentions are skipped. `''` turns it off; absent falls back to the engine default, which is what `config.example` spells out. |
-| `hybrid_phrases` | regex, optional | Phrasing that, **in the same sentence as remote language**, means the posting is describing a hybrid arrangement rather than a remote role. Defeats the remote override for that sentence only. `''` restores the untightened override; absent falls back to the engine default. |
+| `onsite_phrases` | regex, optional | Body language that means the role is on-site, killing as `onsite-body` with the line quoted, **even when the header says the role is remote**. Three things beat it: a location matching `commute_locations`, a negated mention ("this is not an on-site role"), and an unnegated mention of remote work **in the same sentence** — a posting that says "remote, hybrid, or on-site positions" is offering a choice, not describing an on-site role. `''` turns it off; absent falls back to the engine default, which is what `config.example` spells out. |
+| `hybrid_phrases` | regex, optional | Phrasing that, **in the same sentence as a WEAK remote mention**, means the posting is describing a hybrid arrangement rather than a remote role. Defeats the remote override for that sentence only, and only for a weak mention — see below. `''` restores the untightened override; absent falls back to the engine default. |
 | `seniority` | `{min_years, penalty, stretch_years}`, optional | Reads the years-of-experience band out of the body at both ends. A stated floor below `min_years` costs `penalty` points and flags as `junior-band`; a floor at or above `stretch_years` flags as `seniority-stretch` and costs nothing. Neither ever kills. Remove the block and both checks are off — there is no default floor. |
 | `rules` | list of `{name, reason, pattern}` | Your named kill rules. All three keys are required on every rule. |
 
@@ -179,6 +179,21 @@ days", which it did not, because the day names arrive before the phrase rather t
 it. A rejected sentence does not end the search: "Fridays used to be work from home days.
 The role is now fully remote for everyone." still overrides, because the second sentence is
 a true statement about the role.
+
+**A strong claim about the role wins over a hybrid phrase beside it.** The remote vocabulary
+splits in two. "Fully remote", "remote-first", "100% remote", "remote position/role" are
+claims about the ROLE; "work from home", "working remotely", "remote-friendly", "#li-remote"
+are mentions of remote work that say nothing about the role's terms, and are the vocabulary a
+hybrid posting uses when it lists which days are which. Only a weak mention loses to
+`hybrid_phrases`. That is what keeps "fully remote, with an optional desk in our office",
+"fully remote role with 25 days of PTO" and "remote-first; occasional on-site offsites" out
+of the kill list, while "Tuesdays and Fridays are remote/work from home days" stays in it.
+
+**One thing still beats a strong claim: a mandatory office cadence.** A day count tied to an
+office ("3 days a week in the office", "in-office 4 days per week") defeats the override
+wherever it appears in the body, because a requirement is a term of the role rather than an
+option beside it. "Hybrid schedules are available for those who want them" is not that, which
+is why it does not defeat a "fully remote" claim earlier in the posting.
 
 The **on-site body rule** (`onsite_phrases`) is the mirror of that override, and it is the
 one check here that runs even when the posting's header says the role is remote. A body

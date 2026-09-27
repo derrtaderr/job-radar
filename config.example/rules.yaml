@@ -22,7 +22,14 @@ onsite_phrases: 'fully on-?site|100 ?% on-?site|on-?site (?:position|role|job|op
 # "Tuesdays and Fridays are remote/work from home days" no longer passes as
 # remote while "This is a fully remote role. Our office is in Chicago." still
 # does. '' restores the untightened override; absent uses the same default.
-hybrid_phrases: '\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b|\bhybrid\b|\d+ days?|in[- ](?:the |our )?office|on-?site'
+#
+# These only ever defeat a WEAK remote mention ("work from home", "working
+# remotely"). A claim about the ROLE — "fully remote", "remote-first", "100%
+# remote" — wins over any of them in the same sentence, so "fully remote, with an
+# optional desk in our office" stays remote. The one thing that still beats a
+# strong claim is a MANDATORY office cadence ("3 days a week in the office"),
+# which is a term of the role rather than an option beside it.
+hybrid_phrases: '\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b|\bhybrid\b|in[- ](?:the |our )?office|on-?site|\d+ days? (?:a |per )?week (?:in|at|on)|in (?:the |our )?office \d+ days?|in[- ]office \d+ days?|(?:work|working) from home \d+ days?'
 
 # The years-of-experience band, read at BOTH ends. A stated floor below
 # min_years costs `penalty` points and flags as `junior-band`; a floor at or
