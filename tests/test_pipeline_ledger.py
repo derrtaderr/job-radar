@@ -179,14 +179,19 @@ def test_a_repost_is_never_suppressed():
     assert len(survivors) + len(killed) == 1
 
 
-def test_a_repost_of_a_judged_req_carries_the_verdict_too():
+def test_a_repost_flagged_only_by_its_comp_band_does_not_inherit_the_verdict():
+    # Rewritten after R64-02. This posting is flagged as a possible repost through
+    # the COMP fingerprint (its prose differs, so the body hashes differ), and a
+    # comp band plus a common benefits set is not identity. The flag is the honest
+    # output; a verdict here would tell the reader they had already judged a
+    # posting they may never have seen.
     state = _first_run(_row("j1"))
     repost = _row("agg-1", company="Talent Reach Staffing",
                   title="Data Engineer (Client)")
     survivors, _, _ = pipeline([repost], state, CFG, set(), TODAY,
                                decisions=[_killed_by_hand(jid="j1")])
     assert survivors[0]["repost_of"] == "j1"
-    assert survivors[0]["prior"].verdict == "kill"
+    assert survivors[0]["prior"] is None
 
 
 def test_an_unrelated_posting_is_not_flagged_as_a_repost():
@@ -263,3 +268,58 @@ def test_two_unrelated_postings_sharing_a_comp_band_are_not_reposts():
                               "product. Apply through our portal.")
     survivors, _, _ = pipeline([second], _first_run(first), CFG, set(), TODAY)
     assert survivors[0]["repost_of"] is None
+
+
+# --- a comp collision flags, it does not judge (R64-02) ----------------------
+#
+# The comp fingerprint is a band plus a set of benefit tokens, and unrelated
+# postings share both: $130-150K with medical/dental/vision/401k/PTO/parental is an
+# ordinary offer, not an identity. Inheriting a verdict through it told a person
+# they had already killed a company they had never seen — a false statement about
+# their own judgment, which is worse than the miss this row set out to fix.
+#
+# So a comp match still earns the repost FLAG, which a human reads and dismisses in
+# a second. Only a BODY match carries a verdict.
+
+def _unrelated_pair():
+    shared = dict(min_amount=130000, max_amount=150000)
+    first = _row("kd-1", company="Kestrel Dynamics", title="Data Engineer",
+                 description="Kestrel Dynamics builds satellite telemetry. You "
+                             "will own ingestion. Fully remote. " + BENEFITS,
+                 **shared)
+    second = _row("lg-1", company="Larkspur Grid", title="Platform Engineer",
+                  description="Larkspur Grid runs utility billing. You will own "
+                              "the warehouse. Fully remote. " + BENEFITS,
+                  **shared)
+    return first, second
+
+
+def test_a_comp_band_collision_does_not_inherit_a_verdict():
+    first, second = _unrelated_pair()
+    state = _first_run(first)
+    survivors, _, _ = pipeline([second], state, CFG, set(), TODAY,
+                               decisions=[_killed_by_hand(jid="kd-1",
+                                                          company="Kestrel Dynamics",
+                                                          title="Data Engineer")])
+    assert survivors[0]["prior"] is None
+
+
+def test_a_comp_band_collision_still_earns_the_repost_flag():
+    # Kept, not dropped: it is a cheap thing for a human to glance at, and the
+    # aggregator case it was built for does sometimes look exactly like this.
+    first, second = _unrelated_pair()
+    survivors, _, _ = pipeline([second], _first_run(first), CFG, set(), TODAY)
+    assert survivors[0]["repost_of"] == "kd-1"
+
+
+def test_a_body_match_does_carry_the_verdict():
+    # The other side of the line: same posting text, different employer field.
+    verbatim = "Own the reporting layer our finance team queries daily. " + BENEFITS
+    original = _row("nw-1", company="Northwind Analytics", title="Data Engineer",
+                    description=verbatim)
+    repost = _row("agg-1", company="Talent Reach Staffing", title="Data Engineer",
+                  description=verbatim)
+    survivors, _, _ = pipeline([repost], _first_run(original), CFG, set(), TODAY,
+                               decisions=[_killed_by_hand(jid="nw-1")])
+    assert survivors[0]["repost_of"] == "nw-1"
+    assert survivors[0]["prior"].verdict == "kill"

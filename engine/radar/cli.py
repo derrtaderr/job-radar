@@ -23,7 +23,13 @@ import argparse
 import datetime
 
 from engine.radar.config import ConfigError, load_config
-from engine.radar.ledger import VERDICTS, Decision, append_decision, load_ledger
+from engine.radar.ledger import (
+    VERDICTS,
+    Decision,
+    append_decision,
+    current_decision_for,
+    load_ledger,
+)
 from engine.radar.pipeline import pipeline
 from engine.radar.report import day_paths, write_jds, write_report
 from engine.radar.state import entry_field, load_state, save_state
@@ -97,6 +103,17 @@ def _judge(argv) -> int:
               "--title to record the decision anyway, or check the id against "
               "today's queue.")
         return 2
+
+    # What this decision replaces, said out loud. The ledger is append-only and a
+    # person changes their mind, so a second row is a normal day — but a silent
+    # append is indistinguishable from a no-op, and the row about to stop being
+    # current is invisible unless something names it.
+    previous = current_decision_for(load_ledger(cfg.decisions_path), args.jid,
+                                    company, title)
+    if previous is not None:
+        print(f"radar: already judged {previous.date} as {previous.verdict} "
+              f"({previous.reason}); recording the newer decision — the newest row "
+              "wins from now on")
 
     decision = Decision(jid=args.jid, company=company, title=title,
                         verdict=args.verdict, reason=args.reason,

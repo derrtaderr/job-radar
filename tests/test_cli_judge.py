@@ -209,3 +209,73 @@ def test_a_run_survives_a_ledger_it_cannot_fully_parse(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "WARNING" in out
     assert "perhaps" in out
+
+
+# --- judging the same posting twice (R64-08) ---------------------------------
+
+def test_a_second_decision_on_the_same_jid_says_what_it_is_replacing(tmp_path, capsys):
+    # The ledger is append-only and people change their minds, so this is a normal
+    # day rather than an error. But a silent append looks identical to a no-op, and
+    # the reader has no way to tell that the row they are replacing existed.
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    main(["judge", "j1", "--verdict", "kill", "--reason", "bi-analytics",
+          "--config", str(cfg_dir)])
+    capsys.readouterr()
+
+    code = main(["judge", "j1", "--verdict", "draft", "--reason", "reconsidered",
+                 "--config", str(cfg_dir)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "already judged" in out
+    assert "kill" in out
+    assert "recording the newer decision" in out
+    assert len(load_ledger(cfg_dir / "decisions.csv")) == 2
+
+
+def test_the_notice_names_the_date_of_the_decision_being_replaced(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    (cfg_dir / "decisions.csv").write_text(
+        "jid,company,title,verdict,reason,date,url\n"
+        "j1,Northwind Analytics,Data Engineer,kill,bi-analytics,2026-09-20,\n")
+    _seed_state(cfg_dir, _rows())
+    capsys.readouterr()
+    main(["judge", "j1", "--verdict", "draft", "--reason", "reconsidered",
+          "--config", str(cfg_dir)])
+    assert "2026-09-20" in capsys.readouterr().out
+
+
+def test_a_second_decision_on_the_same_company_and_title_also_notices(tmp_path, capsys):
+    # Judged once by jid, then again under the reissued posting's new id. Tier 2 is
+    # what recognises it, so the notice has to fire on the pair too.
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    main(["judge", "j1", "--verdict", "kill", "--reason", "bi-analytics",
+          "--config", str(cfg_dir)])
+    capsys.readouterr()
+
+    main(["judge", "--company", "Northwind Analytics", "--title", "Data Engineer",
+          "--verdict", "draft", "--reason", "reconsidered", "--config", str(cfg_dir)])
+    out = capsys.readouterr().out
+    assert "already judged" in out
+    assert "kill" in out
+
+
+def test_a_first_decision_says_nothing_about_a_previous_one(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    capsys.readouterr()
+    main(["judge", "j1", "--verdict", "kill", "--reason", "bi-analytics",
+          "--config", str(cfg_dir)])
+    assert "already judged" not in capsys.readouterr().out
+
+
+def test_a_decision_about_a_different_posting_says_nothing(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    main(["judge", "j1", "--verdict", "kill", "--reason", "bi-analytics",
+          "--config", str(cfg_dir)])
+    capsys.readouterr()
+    main(["judge", "j2", "--verdict", "draft", "--reason", "strong-fit",
+          "--config", str(cfg_dir)])
+    assert "already judged" not in capsys.readouterr().out

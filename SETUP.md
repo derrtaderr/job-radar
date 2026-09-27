@@ -274,10 +274,24 @@ Not one of the six files you author. `radar.py judge` writes it and the next run
 
 **Matching is three tiers, and the second one is why company and title are recorded.** A
 run tries the exact `jid`, then the normalised `(company, title)` pair, then the posting's
-content fingerprint (comp band plus benefits, and title plus body with the territory tokens
-stripped — both kept in `state.json`). Tier 1 alone is not enough: a job board reissues a
-req under a new posting id and it arrives looking brand new, which is the exact miss this
-file exists to close.
+**body** fingerprint (title plus body with the territory tokens stripped, kept in
+`state.json`). Tier 1 alone is not enough: a job board reissues a req under a new posting id
+and it arrives looking brand new, which is the exact miss this file exists to close.
+
+**Tier 3 is the body fingerprint only, never the comp one.** A comp band plus a benefits set
+("$130-150K, medical/dental/vision/401k/PTO") is an ordinary offer that unrelated postings
+share, so carrying a verdict across it would tell you that you had already killed a company
+you have never seen. A comp match still earns the queue's `possible repost of <jid>` flag,
+which you glance at and dismiss in a second; it is not enough to speak for your judgment. The
+consequence: a repost whose PROSE was rewritten arrives flagged but unjudged.
+
+**You can judge the same posting twice, and the newest row wins.** The file is append-only, so
+changing your mind appends rather than edits, and every tier picks the most recent matching row
+by date (a later row breaks a same-day tie). `judge` prints what it is replacing:
+
+```
+radar: already judged 2026-09-20 as kill (bi-analytics); recording the newer decision — the newest row wins from now on
+```
 
 **A judged posting is never hidden.** It comes back into the queue with your verdict in the
 Prior column, at the score it would otherwise have. Suppressing it, or scoring it down,
