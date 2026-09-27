@@ -133,6 +133,16 @@ other, because picking which copy a person reads is not the engine's call. The l
 never guesses: a `judge` call naming an id this machine has no record of is refused with the
 fix named, rather than recording a row that could only ever match that exact id.
 
+**A flag and a verdict need different amounts of evidence, and the ledger holds them to
+different bars.** Two postings sharing a comp band and a benefits set are worth FLAGGING as
+possible reposts of each other: a person glances at it and dismisses it in a second, and the
+cost of being wrong is that glance. Carrying a past verdict across the same evidence is a
+statement about what they already decided, and being wrong there means telling someone they
+killed a company they have never seen. So a comp-fingerprint match flags, and only a
+body-fingerprint match inherits a verdict. The asymmetry is deliberate: the cheaper the
+recovery from a wrong call, the looser the evidence behind it may be. The consequence is named
+rather than hidden — a repost whose prose was rewritten arrives flagged but unjudged.
+
 **The claim gate, and `[CONFIRM]`.** Every drafted resume or cover-letter claim must trace
 to a line in the user's own `profile.md`. Rephrasing and re-emphasizing real experience for
 a posting's vocabulary is the work; inventing a skill, a metric, or a responsibility is
