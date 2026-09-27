@@ -147,15 +147,35 @@ def append_decision(path, decision: Decision) -> None:
 
     Written through `csv` rather than by string join, so a company like
     "Northwind Analytics, Inc." cannot shift every column after it by one.
+
+    The header is written **atomically with the first row**, via exclusive-create
+    mode. Checking `exists()` and then opening for append is two operations with a
+    gap, and two `judge` calls that both fall in that gap both wrote a header — the
+    second one landing in the middle of the data as a row reading
+    "jid,company,title,..." that the parser then rejects by name on every run
+    afterwards. `x` mode makes "create it, header first" one decision the
+    filesystem arbitrates: the loser gets FileExistsError and appends a bare row,
+    which is the correct outcome.
     """
     p = Path(path)
-    new = not p.exists() or not p.read_text().strip()
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("a", newline="") as f:
-        writer = csv.writer(f)
-        if new:
+    row = [str(getattr(decision, c) or "") for c in COLUMNS]
+    try:
+        with p.open("x", newline="") as f:
+            writer = csv.writer(f)
             writer.writerow(COLUMNS)
-        writer.writerow([str(getattr(decision, c) or "") for c in COLUMNS])
+            writer.writerow(row)
+        return
+    except FileExistsError:
+        pass
+    with p.open("a", newline="") as f:
+        # An existing but empty file is the crash-recovery case: the create won the
+        # race and died before writing. tell() on an append handle is the size, read
+        # after the handle is held rather than before, so it cannot go stale.
+        writer = csv.writer(f)
+        if f.tell() == 0:
+            writer.writerow(COLUMNS)
+        writer.writerow(row)
 
 
 def _recency_key(indexed):
