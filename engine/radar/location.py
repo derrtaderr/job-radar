@@ -12,6 +12,7 @@ same table's canonical spellings.
 """
 from __future__ import annotations
 
+import functools
 import re
 
 # Full name → USPS abbreviation. DC is included because postings write it as a
@@ -95,11 +96,45 @@ def normalise_location(value) -> str:
     return ", ".join(parts)
 
 
+# A pattern is a plain list of place names only if it carries no regex syntax
+# beyond the `|` that separates entries. Anything else (a character class, a
+# quantifier, an escape) cannot be split into entries and normalised without
+# changing what it means.
+_PLAIN_ALTERNATION = re.compile(r"^[^\\^$.|?*+()\[\]{}]+(?:\|[^\\^$.|?*+()\[\]{}]+)*$")
+
+
+@functools.lru_cache(maxsize=256)
+def _normalised_alternation(source: str):
+    """The allowlist pattern with each of its entries normalised, or None when the
+    pattern is not a plain list of names.
+
+    Normalising only the LOCATION broke the other side of the comparison: an
+    allowlist written as a full state name ("Colorado") used to substring-match
+    "Denver, Colorado" and stopped matching once the location normalised to
+    `denver, co`. Both sides have to go through the same function, or the fix for
+    one spelling becomes a regression for another.
+    """
+    if not _PLAIN_ALTERNATION.match(source):
+        return None
+    entries = []
+    for entry in source.split("|"):
+        entry = normalise_location(entry)
+        if entry and entry not in entries:
+            entries.append(entry)
+    if not entries:
+        return None
+    # Entries are literals now, so they are escaped rather than re-compiled as
+    # patterns — a name containing punctuation must match itself, not be read as
+    # syntax.
+    return re.compile("|".join(re.escape(e) for e in entries), re.I)
+
+
 def pattern_matches_location(pattern, value) -> bool:
     """Does a commute-allowlist pattern match this location?
 
-    Matched against the NORMALISED parts, and only on word boundaries — never as
-    a bare substring of the raw string. A pattern of `NY` substring-matches
+    Matched against the NORMALISED parts of the location, with the pattern's own
+    entries normalised the same way, and only on word boundaries — never as a bare
+    substring of the raw string. A pattern of `NY` substring-matches
     "Pennsylvania, United States" (…syl-VA-nia) while missing "New York, United
     States" entirely, which is one spelling of a place passing and another
     spelling of the same place being killed in one run. Word-bounded matching on
@@ -109,14 +144,23 @@ def pattern_matches_location(pattern, value) -> bool:
     """
     if not pattern:
         return False
+    # The pattern as written, and — when it is a plain list of names — the same
+    # list with every entry normalised. Both are tried, so `CO`, `Colorado` and
+    # `Denver` all keep matching "Denver, Colorado".
+    candidates = [pattern]
+    normalised = _normalised_alternation(pattern.pattern)
+    if normalised is not None:
+        candidates.append(normalised)
+
     for part in normalise_location(value).split(", "):
         if not part:
             continue
-        for m in pattern.finditer(part):
-            before = part[m.start() - 1] if m.start() else ""
-            after = part[m.end()] if m.end() < len(part) else ""
-            if not _is_word_char(before) and not _is_word_char(after):
-                return True
+        for candidate in candidates:
+            for m in candidate.finditer(part):
+                before = part[m.start() - 1] if m.start() else ""
+                after = part[m.end()] if m.end() < len(part) else ""
+                if not _is_word_char(before) and not _is_word_char(after):
+                    return True
     return False
 
 
