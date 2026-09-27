@@ -81,6 +81,7 @@ OK   profile: <repo>/config/profile.md has the required shape
 OK   privacy hook: core.hooksPath is .githooks
 OK   gitignore integrity: <repo>/.gitignore has all 6 required lines
 SKIP tracker: no tracker: configured in settings.yaml — nothing to check
+OK   decision ledger: <repo>/config/decisions.csv parses (1 decision recorded)
 ```
 
 Ten checks, always all ten. The doctor never stops at the first problem, because a
@@ -612,6 +613,54 @@ in `settings.yaml` or move the file back. Anything else the tracker check report
 contract violation from section 4, quoted with its line number.
 
 **`OK   tracker: <path> matches the tracker format contract`** → clean; nothing to fix.
+
+**`SKIP decision ledger: no ledger at <path> yet — nothing judged so far`** → expected before
+your first `radar.py judge`. The ledger is written by that command, not by you, so its absence
+on day one is the honest state and not a thing to fix.
+
+**`OK   decision ledger: <path> parses (N decisions recorded)`** → clean. Right after
+`cp -r config.example config` this reads `(1 decision recorded)` — the example's one fictional
+row. Delete that row from `config/decisions.csv` once you have your own.
+
+**`FAIL decision ledger: ledger row 3: verdict 'maybe' is not one of kill, draft`** → the
+verdict column is closed to exactly two values. The number is the line in the file, counting the
+header as line 1. Edit the row named. Every other row in the file
+is still read, both by the doctor and by a run; one typo does not cost you the rest of your
+judgment.
+
+**`FAIL decision ledger: ledger row 4: needs a jid, or a company and title — a row with none
+of them can never match a posting`** → the row cannot be matched to any posting, so nothing
+would ever surface it. Fill in the id, or the company and title.
+
+**`FAIL decision ledger: ledger is missing required column(s): title, reason, date, url
+(header must be: jid,company,title,verdict,reason,date,url)`** → the header line was edited or
+lost. Restore it
+exactly; the whole file is unreadable without it.
+
+**`radar: WARNING — <path>: ledger row 2: verdict 'maybe' is not one of kill, draft`** → the
+same finding, printed by a RUN rather than the doctor. The run continues with every row it can
+read; this warning is easy to miss in the middle of a scrape's output, which is why check 10
+says it again with nothing else competing for attention.
+
+**`radar: judge doesn't recognise the id 'x' — this machine has no record of it in <path>`** →
+the id is not in `state.json`. Check it against the `jd` link in today's queue, or pass
+`--company` and `--title` to record the decision anyway.
+
+**`radar: 'x' is in <path>, but its entry predates the company and title a ledger row needs
+(it was written before this machine recorded them). Pass --company and --title to record the
+decision.`** → different cause from the one above, same fix. The id is right; the state entry
+predates the company and title. This is the message an upgraded install sees for a posting it
+first saw before row 64.
+
+**`radar: judge needs something to match a posting on — give a jid from the queue, or both
+--company and --title`** → a ledger row needs both a company and a title, not one of them. A row
+carrying only one can never match anything but the exact id, which is the case the ledger exists
+to cover. With a jid present but a flag missing, the same refusal names the missing flag instead
+(`... Pass --title to record the decision.`).
+
+**`radar: already judged 2026-09-20 as kill (bi-analytics); recording the newer decision — the
+newest row wins from now on`** → not an error. You judged this posting before; the file is
+append-only, so changing your mind appends. Every later run reads the newest row.
 
 ### The radar
 

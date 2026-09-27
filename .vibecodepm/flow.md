@@ -1,9 +1,9 @@
 ---
 name: job-radar flow map
-read_by: the Phase 4 ship-check / stranger-walk audit before any release or visibility decision, and any session that adds a CLI verb, a config field, or a new failure state
-milestone: Phase 4 (offline demo + ship-check contract files)
-status: current — matches the build at lane/phase-4
-date: 2026-09-13
+read_by: the ship-check / stranger-walk audit before any release or visibility decision, and any session that adds a CLI verb, a config field, or a new failure state
+milestone: row 64 (decision ledger, repost fingerprints, four rule types); Phase 4 before it
+status: current — matches the build at lane/row64-decision-ledger
+date: 2026-09-26
 supersedes: none — first flow map for this repo
 ---
 

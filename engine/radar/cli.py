@@ -130,8 +130,10 @@ def _judge(argv) -> int:
                   f"{missing} to record the decision anyway, or check the id "
                   "against today's queue.")
         else:
+            # No id at all: naming only the half they left out reads as though the
+            # other half were optional. The pair is the unit.
             print("radar: judge needs something to match a posting on — give a jid "
-                  f"from the queue, or {missing}")
+                  "from the queue, or both --company and --title")
         return 2
 
     # What this decision replaces, said out loud. The ledger is append-only and a
