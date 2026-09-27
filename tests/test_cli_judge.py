@@ -20,11 +20,12 @@ import shutil
 from pathlib import Path
 
 from engine.radar.cli import main
-from engine.radar.ledger import load_ledger
+from engine.radar.ledger import Decision, append_decision, load_ledger
 from tests.fixtures import make_row
 
 EXAMPLE = Path(__file__).parent.parent / "config.example"
 TODAY = str(datetime.date.today())
+HEADER = "jid,company,title,verdict,reason,date,url"
 
 
 def _config(tmp_path):
@@ -279,3 +280,117 @@ def test_a_decision_about_a_different_posting_says_nothing(tmp_path, capsys):
     main(["judge", "j2", "--verdict", "draft", "--reason", "strong-fit",
           "--config", str(cfg_dir)])
     assert "already judged" not in capsys.readouterr().out
+
+
+# --- refusals and races, sharpened (R64-10, R64-11, R64-12, R64-13) ----------
+
+def test_a_company_without_a_title_is_refused(tmp_path, capsys):
+    # R64-10. It used to write a company-only row, which can only ever match tier
+    # 1 — the exact id — and tier 1 is the tier that already missed the reissued
+    # req. A row that cannot do the job it exists for is worse than no row: it
+    # looks recorded.
+    cfg_dir = _config(tmp_path)
+    code = main(["judge", "never-seen", "--verdict", "kill", "--reason", "x",
+                 "--company", "Ghost Consulting", "--config", str(cfg_dir)])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "--title" in out
+    assert not (cfg_dir / "decisions.csv").exists()
+
+
+def test_a_title_without_a_company_is_refused(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    code = main(["judge", "--title", "Data Engineer", "--verdict", "kill",
+                 "--reason", "x", "--config", str(cfg_dir)])
+    assert code == 2
+    assert "--company" in capsys.readouterr().out
+
+
+def test_an_entry_that_predates_fingerprints_says_so(tmp_path, capsys):
+    # R64-11. The jid IS in state — as a legacy date string, written before entries
+    # carried a company and title. Telling the reader "this machine has no record
+    # of it" is false, and it sends them to check the id against the queue when the
+    # id was right and the record is simply older than the feature.
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    state_path = cfg_dir / "state.json"
+    state_path.write_text('{"j1": "2026-09-20"}\n')
+
+    code = main(["judge", "j1", "--verdict", "kill", "--reason", "x",
+                 "--config", str(cfg_dir)])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "predates" in out
+    assert "--company" in out and "--title" in out
+    assert "no record" not in out
+
+
+def test_an_unknown_id_and_a_legacy_id_give_different_messages(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    (cfg_dir / "state.json").write_text('{"j1": "2026-09-20"}\n')
+
+    main(["judge", "j1", "--verdict", "kill", "--reason", "x", "--config", str(cfg_dir)])
+    legacy = capsys.readouterr().out
+    main(["judge", "nope", "--verdict", "kill", "--reason", "x", "--config", str(cfg_dir)])
+    unknown = capsys.readouterr().out
+    assert legacy != unknown
+
+
+def test_a_legacy_entry_can_be_judged_with_the_flags_it_asks_for(tmp_path):
+    cfg_dir = _config(tmp_path)
+    _seed_state(cfg_dir, _rows())
+    (cfg_dir / "state.json").write_text('{"j1": "2026-09-20"}\n')
+    assert main(["judge", "j1", "--company", "Northwind Analytics",
+                 "--title", "Data Engineer", "--verdict", "kill",
+                 "--reason", "bi-analytics", "--config", str(cfg_dir)]) == 0
+    assert load_ledger(cfg_dir / "decisions.csv")[0].company == "Northwind Analytics"
+
+
+def test_a_ledger_never_grows_a_second_header(tmp_path, monkeypatch):
+    # R64-12. Two `judge` calls that both decide the file is new both wrote a
+    # header, and the second one lands in the middle of the data as a row reading
+    # "jid,company,title,..." — a row the parser then rejects by name every run
+    # after. Simulated by making the existence check lie, which is exactly what a
+    # race does.
+    from engine.radar import ledger as ledger_mod
+
+    path = tmp_path / "decisions.csv"
+    first = Decision(jid="j1", company="Northwind Analytics", title="Data Engineer",
+                     verdict="kill", reason="a", date="2026-09-25", url="")
+    second = Decision(jid="j2", company="Cobalt Grid", title="Data Platform Engineer",
+                      verdict="draft", reason="b", date="2026-09-25", url="")
+    ledger_mod.append_decision(path, first)
+
+    real_exists = ledger_mod.Path.exists
+    monkeypatch.setattr(ledger_mod.Path, "exists", lambda self: False)
+    ledger_mod.append_decision(path, second)
+    monkeypatch.setattr(ledger_mod.Path, "exists", real_exists)
+
+    lines = path.read_text().splitlines()
+    assert lines.count(HEADER) == 1, lines
+    decisions, problems = ledger_mod.parse_ledger(path.read_text())
+    assert problems == []
+    assert [d.jid for d in decisions] == ["j1", "j2"]
+
+
+def test_an_empty_ledger_file_still_gets_its_header(tmp_path):
+    # The crash-recovery case: a file exists but holds nothing.
+    path = tmp_path / "decisions.csv"
+    path.write_text("")
+    append_decision(path, Decision(
+        jid="j1", company="Northwind Analytics", title="Data Engineer",
+        verdict="kill", reason="a", date="2026-09-25", url=""))
+    assert path.read_text().splitlines()[0] == HEADER
+
+
+def test_the_top_level_help_lists_judge(capsys):
+    # R64-13. `judge` was dispatched before argparse ever saw the arguments, so it
+    # appeared in no help output anywhere and a stranger could only find it by
+    # reading the README.
+    import pytest
+
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    out = capsys.readouterr().out
+    assert "judge" in out

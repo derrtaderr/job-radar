@@ -39,9 +39,24 @@ _NO_SCRAPE = ("radar: scrape module not yet available (engine/radar/scrape.py) �
               "this command needs it for network access")
 
 
+_JUDGE_HELP = """\
+The `judge` subcommand records a decision you made about a posting:
+
+  radar.py judge <jid> --verdict kill  --reason bi-analytics
+  radar.py judge <jid> --verdict draft --reason strong-fit
+  radar.py judge --company "..." --title "..." --verdict kill --reason ...
+
+It writes config/decisions.csv, which every later run reads: a judged posting
+comes back with that verdict in the queue's Prior column rather than as a fresh
+row. Run `radar.py judge --help` for its own options.
+"""
+
+
 def _parse(argv):
     parser = argparse.ArgumentParser(
-        prog="radar", description="Deterministic job-search radar.")
+        prog="radar", description="Deterministic job-search radar.",
+        epilog=_JUDGE_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default="./config", metavar="DIR",
                         help="config directory (default: ./config)")
     parser.add_argument("--check", action="store_true",
@@ -87,21 +102,36 @@ def _judge(argv) -> int:
         print(f"radar: {exc}")
         return 2
 
-    entry = load_state(cfg.state_file).get(args.jid) if args.jid else None
+    state = load_state(cfg.state_file)
+    known = args.jid in state if args.jid else False
+    entry = state.get(args.jid) if args.jid else None
     company = args.company or (entry_field(entry, "company") or "")
     title = args.title or (entry_field(entry, "title") or "")
 
-    if not (args.jid or company):
-        print("radar: judge needs something to match a posting on — give a jid "
-              "from the queue, or --company and --title")
-        return 2
-    if args.jid and not company:
-        # A guess here would write a row that can only ever match on the exact
-        # id, which is the tier that already let a reissued req through.
-        print(f"radar: judge doesn't recognise the id {args.jid!r} — this machine "
-              f"has no record of it in {cfg.state_file}. Pass --company and "
-              "--title to record the decision anyway, or check the id against "
-              "today's queue.")
+    # BOTH a company and a title, always. A row carrying only one of them can only
+    # ever match on the exact id — and tier 1 is the tier that already let the
+    # reissued req through, which is the whole reason this command exists. A row
+    # that cannot do its job is worse than no row, because it looks recorded.
+    if not (company and title):
+        missing = " and ".join(
+            flag for flag, value in (("--company", company), ("--title", title))
+            if not value)
+        if args.jid and known:
+            # The id IS on file, as an entry written before entries carried a
+            # company and title. "No record of it" would be false, and it would
+            # send someone to re-check an id that was right all along.
+            print(f"radar: {args.jid!r} is in {cfg.state_file}, but its entry "
+                  "predates the company and title a ledger row needs (it was "
+                  "written before this machine recorded them). Pass "
+                  f"{missing} to record the decision.")
+        elif args.jid:
+            print(f"radar: judge doesn't recognise the id {args.jid!r} — this "
+                  f"machine has no record of it in {cfg.state_file}. Pass "
+                  f"{missing} to record the decision anyway, or check the id "
+                  "against today's queue.")
+        else:
+            print("radar: judge needs something to match a posting on — give a jid "
+                  f"from the queue, or {missing}")
         return 2
 
     # What this decision replaces, said out loud. The ledger is append-only and a
