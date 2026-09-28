@@ -1,0 +1,1757 @@
+{
+  "schema": "system-map/baseline@1",
+  "modules": [
+    {
+      "path": "engine/__init__.py",
+      "language": "python",
+      "contentHash": "e3b0c44298fc",
+      "cite": "engine/__init__.py:1"
+    },
+    {
+      "path": "engine/draft/__init__.py",
+      "language": "python",
+      "contentHash": "e3b0c44298fc",
+      "cite": "engine/draft/__init__.py:1"
+    },
+    {
+      "path": "engine/draft/compile.py",
+      "language": "python",
+      "contentHash": "bbb41bb42704",
+      "cite": "engine/draft/compile.py:1"
+    },
+    {
+      "path": "engine/draft/registry.py",
+      "language": "python",
+      "contentHash": "417b70f56764",
+      "cite": "engine/draft/registry.py:1"
+    },
+    {
+      "path": "engine/loop/__init__.py",
+      "language": "python",
+      "contentHash": "e3b0c44298fc",
+      "cite": "engine/loop/__init__.py:1"
+    },
+    {
+      "path": "engine/loop/archive.py",
+      "language": "python",
+      "contentHash": "2061de1ba4f5",
+      "cite": "engine/loop/archive.py:1"
+    },
+    {
+      "path": "engine/loop/calibrate.py",
+      "language": "python",
+      "contentHash": "951f06fe141c",
+      "cite": "engine/loop/calibrate.py:1"
+    },
+    {
+      "path": "engine/loop/followup.py",
+      "language": "python",
+      "contentHash": "e9fb3c9c19dc",
+      "cite": "engine/loop/followup.py:1"
+    },
+    {
+      "path": "engine/loop/tracker_edit.py",
+      "language": "python",
+      "contentHash": "4f3a1feb7f2e",
+      "cite": "engine/loop/tracker_edit.py:1"
+    },
+    {
+      "path": "engine/loop/tracker_schema.py",
+      "language": "python",
+      "contentHash": "8b70bbe1e4ba",
+      "cite": "engine/loop/tracker_schema.py:1"
+    },
+    {
+      "path": "engine/profile_schema.py",
+      "language": "python",
+      "contentHash": "43a4acd1203f",
+      "cite": "engine/profile_schema.py:1"
+    },
+    {
+      "path": "engine/radar/__init__.py",
+      "language": "python",
+      "contentHash": "e3b0c44298fc",
+      "cite": "engine/radar/__init__.py:1"
+    },
+    {
+      "path": "engine/radar/cli.py",
+      "language": "python",
+      "contentHash": "5c27dce345d6",
+      "cite": "engine/radar/cli.py:1"
+    },
+    {
+      "path": "engine/radar/config.py",
+      "language": "python",
+      "contentHash": "5cfdc7704727",
+      "cite": "engine/radar/config.py:1"
+    },
+    {
+      "path": "engine/radar/fingerprint.py",
+      "language": "python",
+      "contentHash": "2eef19e4587a",
+      "cite": "engine/radar/fingerprint.py:1"
+    },
+    {
+      "path": "engine/radar/ledger.py",
+      "language": "python",
+      "contentHash": "85bd8ec4d4d9",
+      "cite": "engine/radar/ledger.py:1"
+    },
+    {
+      "path": "engine/radar/location.py",
+      "language": "python",
+      "contentHash": "d80f8c53fae0",
+      "cite": "engine/radar/location.py:1"
+    },
+    {
+      "path": "engine/radar/pipeline.py",
+      "language": "python",
+      "contentHash": "2c7aa3fbe7cf",
+      "cite": "engine/radar/pipeline.py:1"
+    },
+    {
+      "path": "engine/radar/report.py",
+      "language": "python",
+      "contentHash": "c425ba331eb1",
+      "cite": "engine/radar/report.py:1"
+    },
+    {
+      "path": "engine/radar/rules_engine.py",
+      "language": "python",
+      "contentHash": "ba0b3dd4734d",
+      "cite": "engine/radar/rules_engine.py:1"
+    },
+    {
+      "path": "engine/radar/scrape.py",
+      "language": "python",
+      "contentHash": "aa5f6bc4c307",
+      "cite": "engine/radar/scrape.py:1"
+    },
+    {
+      "path": "engine/radar/state.py",
+      "language": "python",
+      "contentHash": "76313220dada",
+      "cite": "engine/radar/state.py:1"
+    },
+    {
+      "path": "engine/radar/tracker.py",
+      "language": "python",
+      "contentHash": "3524f8ba8027",
+      "cite": "engine/radar/tracker.py:1"
+    },
+    {
+      "path": "radar.py",
+      "language": "python",
+      "contentHash": "8dc1166d5c14",
+      "cite": "radar.py:1"
+    },
+    {
+      "path": "tools/__init__.py",
+      "language": "python",
+      "contentHash": "e3b0c44298fc",
+      "cite": "tools/__init__.py:1"
+    },
+    {
+      "path": "tools/ats_check.py",
+      "language": "python",
+      "contentHash": "0573bfcc749b",
+      "cite": "tools/ats_check.py:1"
+    },
+    {
+      "path": "tools/calibrate.py",
+      "language": "python",
+      "contentHash": "50e1b7cd7fd8",
+      "cite": "tools/calibrate.py:1"
+    },
+    {
+      "path": "tools/demo.py",
+      "language": "python",
+      "contentHash": "9c045ab508b0",
+      "cite": "tools/demo.py:1"
+    },
+    {
+      "path": "tools/doctor.py",
+      "language": "python",
+      "contentHash": "5ab896966aed",
+      "cite": "tools/doctor.py:1"
+    },
+    {
+      "path": "tools/privacy_guard.py",
+      "language": "python",
+      "contentHash": "78dc641bf5cd",
+      "cite": "tools/privacy_guard.py:1"
+    },
+    {
+      "path": "tools/tracker_cli.py",
+      "language": "python",
+      "contentHash": "72a9195ead3f",
+      "cite": "tools/tracker_cli.py:1"
+    },
+    {
+      "path": "tools/verify_pdf.py",
+      "language": "python",
+      "contentHash": "e22cbfe0fb11",
+      "cite": "tools/verify_pdf.py:1"
+    }
+  ],
+  "edges": [
+    {
+      "from": "engine/draft/compile.py",
+      "specifier": "shutil",
+      "kind": "python-import",
+      "line": 5,
+      "cite": "engine/draft/compile.py:5",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/draft/compile.py",
+      "specifier": "subprocess",
+      "kind": "python-import",
+      "line": 6,
+      "cite": "engine/draft/compile.py:6",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/draft/compile.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 7,
+      "cite": "engine/draft/compile.py:7",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/draft/registry.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 14,
+      "cite": "engine/draft/registry.py:14",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/draft/registry.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "engine/draft/registry.py:15",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/draft/registry.py",
+      "specifier": "yaml",
+      "kind": "python-import",
+      "line": 17,
+      "cite": "engine/draft/registry.py:17",
+      "to": null,
+      "external": true,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/archive.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 48,
+      "cite": "engine/loop/archive.py:48",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/archive.py",
+      "specifier": "shutil",
+      "kind": "python-import",
+      "line": 49,
+      "cite": "engine/loop/archive.py:49",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/archive.py",
+      "specifier": "tempfile",
+      "kind": "python-import",
+      "line": 50,
+      "cite": "engine/loop/archive.py:50",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/archive.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 51,
+      "cite": "engine/loop/archive.py:51",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 34,
+      "cite": "engine/loop/calibrate.py:34",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 35,
+      "cite": "engine/loop/calibrate.py:35",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 36,
+      "cite": "engine/loop/calibrate.py:36",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "engine.loop.archive",
+      "kind": "python-import",
+      "line": 38,
+      "cite": "engine/loop/calibrate.py:38",
+      "to": "engine/loop/archive.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "engine.loop.tracker_schema",
+      "kind": "python-import",
+      "line": 39,
+      "cite": "engine/loop/calibrate.py:39",
+      "to": "engine/loop/tracker_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "engine.radar.tracker",
+      "kind": "python-import",
+      "line": 40,
+      "cite": "engine/loop/calibrate.py:40",
+      "to": "engine/radar/tracker.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/calibrate.py",
+      "specifier": "engine.radar.rules_engine",
+      "kind": "python-import",
+      "line": 511,
+      "cite": "engine/loop/calibrate.py:511",
+      "to": "engine/radar/rules_engine.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/followup.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 22,
+      "cite": "engine/loop/followup.py:22",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/followup.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 23,
+      "cite": "engine/loop/followup.py:23",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/followup.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 24,
+      "cite": "engine/loop/followup.py:24",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/followup.py",
+      "specifier": "engine.loop.tracker_schema",
+      "kind": "python-import",
+      "line": 26,
+      "cite": "engine/loop/followup.py:26",
+      "to": "engine/loop/tracker_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/tracker_edit.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 18,
+      "cite": "engine/loop/tracker_edit.py:18",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/tracker_edit.py",
+      "specifier": "engine.loop.tracker_schema",
+      "kind": "python-import",
+      "line": 20,
+      "cite": "engine/loop/tracker_edit.py:20",
+      "to": "engine/loop/tracker_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/tracker_edit.py",
+      "specifier": "engine.radar.tracker",
+      "kind": "python-import",
+      "line": 21,
+      "cite": "engine/loop/tracker_edit.py:21",
+      "to": "engine/radar/tracker.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/loop/tracker_schema.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 16,
+      "cite": "engine/loop/tracker_schema.py:16",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/loop/tracker_schema.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 17,
+      "cite": "engine/loop/tracker_schema.py:17",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "importlib",
+      "kind": "python-import",
+      "line": 163,
+      "cite": "engine/radar/cli.py:163",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.scrape",
+      "kind": "python-import",
+      "line": 165,
+      "cite": "engine/radar/cli.py:165",
+      "to": "engine/radar/scrape.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 22,
+      "cite": "engine/radar/cli.py:22",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 23,
+      "cite": "engine/radar/cli.py:23",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.config",
+      "kind": "python-import",
+      "line": 25,
+      "cite": "engine/radar/cli.py:25",
+      "to": "engine/radar/config.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.ledger",
+      "kind": "python-import",
+      "line": 26,
+      "cite": "engine/radar/cli.py:26",
+      "to": "engine/radar/ledger.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.pipeline",
+      "kind": "python-import",
+      "line": 33,
+      "cite": "engine/radar/cli.py:33",
+      "to": "engine/radar/pipeline.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.report",
+      "kind": "python-import",
+      "line": 34,
+      "cite": "engine/radar/cli.py:34",
+      "to": "engine/radar/report.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.state",
+      "kind": "python-import",
+      "line": 35,
+      "cite": "engine/radar/cli.py:35",
+      "to": "engine/radar/state.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/cli.py",
+      "specifier": "engine.radar.tracker",
+      "kind": "python-import",
+      "line": 36,
+      "cite": "engine/radar/cli.py:36",
+      "to": "engine/radar/tracker.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 10,
+      "cite": "engine/radar/config.py:10",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "typing",
+      "kind": "python-import",
+      "line": 11,
+      "cite": "engine/radar/config.py:11",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "yaml",
+      "kind": "python-import",
+      "line": 13,
+      "cite": "engine/radar/config.py:13",
+      "to": null,
+      "external": true,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "engine.radar.rules_engine",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "engine/radar/config.py:15",
+      "to": "engine/radar/rules_engine.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 8,
+      "cite": "engine/radar/config.py:8",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/config.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 9,
+      "cite": "engine/radar/config.py:9",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/fingerprint.py",
+      "specifier": "hashlib",
+      "kind": "python-import",
+      "line": 24,
+      "cite": "engine/radar/fingerprint.py:24",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/fingerprint.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 25,
+      "cite": "engine/radar/fingerprint.py:25",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/fingerprint.py",
+      "specifier": "engine.radar.location",
+      "kind": "python-import",
+      "line": 27,
+      "cite": "engine/radar/fingerprint.py:27",
+      "to": "engine/radar/location.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/fingerprint.py",
+      "specifier": "engine.radar.rules_engine",
+      "kind": "python-import",
+      "line": 28,
+      "cite": "engine/radar/fingerprint.py:28",
+      "to": "engine/radar/rules_engine.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "csv",
+      "kind": "python-import",
+      "line": 39,
+      "cite": "engine/radar/ledger.py:39",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 40,
+      "cite": "engine/radar/ledger.py:40",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "io",
+      "kind": "python-import",
+      "line": 41,
+      "cite": "engine/radar/ledger.py:41",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 42,
+      "cite": "engine/radar/ledger.py:42",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 43,
+      "cite": "engine/radar/ledger.py:43",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 44,
+      "cite": "engine/radar/ledger.py:44",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "engine.radar.fingerprint",
+      "kind": "python-import",
+      "line": 46,
+      "cite": "engine/radar/ledger.py:46",
+      "to": "engine/radar/fingerprint.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/ledger.py",
+      "specifier": "engine.radar.state",
+      "kind": "python-import",
+      "line": 47,
+      "cite": "engine/radar/ledger.py:47",
+      "to": "engine/radar/state.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/location.py",
+      "specifier": "functools",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "engine/radar/location.py:15",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/location.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 16,
+      "cite": "engine/radar/location.py:16",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "hashlib",
+      "kind": "python-import",
+      "line": 25,
+      "cite": "engine/radar/pipeline.py:25",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "engine.radar.fingerprint",
+      "kind": "python-import",
+      "line": 27,
+      "cite": "engine/radar/pipeline.py:27",
+      "to": "engine/radar/fingerprint.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "engine.radar.ledger",
+      "kind": "python-import",
+      "line": 28,
+      "cite": "engine/radar/pipeline.py:28",
+      "to": "engine/radar/ledger.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "engine.radar.rules_engine",
+      "kind": "python-import",
+      "line": 29,
+      "cite": "engine/radar/pipeline.py:29",
+      "to": "engine/radar/rules_engine.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "engine.radar.state",
+      "kind": "python-import",
+      "line": 30,
+      "cite": "engine/radar/pipeline.py:30",
+      "to": "engine/radar/state.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/pipeline.py",
+      "specifier": "engine.radar.tracker",
+      "kind": "python-import",
+      "line": 31,
+      "cite": "engine/radar/pipeline.py:31",
+      "to": "engine/radar/tracker.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/report.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 11,
+      "cite": "engine/radar/report.py:11",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/report.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 12,
+      "cite": "engine/radar/report.py:12",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/rules_engine.py",
+      "specifier": "typing",
+      "kind": "python-import",
+      "line": 10,
+      "cite": "engine/radar/rules_engine.py:10",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/rules_engine.py",
+      "specifier": "engine.radar.location",
+      "kind": "python-import",
+      "line": 12,
+      "cite": "engine/radar/rules_engine.py:12",
+      "to": "engine/radar/location.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/rules_engine.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 8,
+      "cite": "engine/radar/rules_engine.py:8",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/rules_engine.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 9,
+      "cite": "engine/radar/rules_engine.py:9",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/scrape.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 12,
+      "cite": "engine/radar/scrape.py:12",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/scrape.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 13,
+      "cite": "engine/radar/scrape.py:13",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/scrape.py",
+      "specifier": "urllib.error",
+      "kind": "python-import",
+      "line": 14,
+      "cite": "engine/radar/scrape.py:14",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/scrape.py",
+      "specifier": "urllib.request",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "engine/radar/scrape.py:15",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/scrape.py",
+      "specifier": "jobspy",
+      "kind": "python-import",
+      "line": 91,
+      "cite": "engine/radar/scrape.py:91",
+      "to": null,
+      "external": true,
+      "builtin": false
+    },
+    {
+      "from": "engine/radar/state.py",
+      "specifier": "json",
+      "kind": "python-import",
+      "line": 22,
+      "cite": "engine/radar/state.py:22",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/state.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 23,
+      "cite": "engine/radar/state.py:23",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/tracker.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 10,
+      "cite": "engine/radar/tracker.py:10",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/tracker.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 11,
+      "cite": "engine/radar/tracker.py:11",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "engine/radar/tracker.py",
+      "specifier": "engine.radar.rules_engine",
+      "kind": "python-import",
+      "line": 13,
+      "cite": "engine/radar/tracker.py:13",
+      "to": "engine/radar/rules_engine.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "radar.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 4,
+      "cite": "radar.py:4",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "radar.py",
+      "specifier": "engine.radar.cli",
+      "kind": "python-import",
+      "line": 6,
+      "cite": "radar.py:6",
+      "to": "engine/radar/cli.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "tools/ats_check.py:15",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 16,
+      "cite": "tools/ats_check.py:16",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 17,
+      "cite": "tools/ats_check.py:17",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "collections",
+      "kind": "python-import",
+      "line": 18,
+      "cite": "tools/ats_check.py:18",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 19,
+      "cite": "tools/ats_check.py:19",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/ats_check.py",
+      "specifier": "tools.verify_pdf",
+      "kind": "python-import",
+      "line": 27,
+      "cite": "tools/ats_check.py:27",
+      "to": "tools/verify_pdf.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/calibrate.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 19,
+      "cite": "tools/calibrate.py:19",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/calibrate.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 20,
+      "cite": "tools/calibrate.py:20",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/calibrate.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 21,
+      "cite": "tools/calibrate.py:21",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/calibrate.py",
+      "specifier": "engine.loop.calibrate",
+      "kind": "python-import",
+      "line": 29,
+      "cite": "tools/calibrate.py:29",
+      "to": "engine/loop/calibrate.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/calibrate.py",
+      "specifier": "engine.radar.config",
+      "kind": "python-import",
+      "line": 30,
+      "cite": "tools/calibrate.py:30",
+      "to": "engine/radar/config.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "tests.fixtures_demo_rows",
+      "kind": "python-import",
+      "line": 190,
+      "cite": "tools/demo.py:190",
+      "to": "tests/fixtures_demo_rows.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "tests.fixtures_season",
+      "kind": "python-import",
+      "line": 268,
+      "cite": "tools/demo.py:268",
+      "to": "tests/fixtures_season.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 45,
+      "cite": "tools/demo.py:45",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "shutil",
+      "kind": "python-import",
+      "line": 46,
+      "cite": "tools/demo.py:46",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 47,
+      "cite": "tools/demo.py:47",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 48,
+      "cite": "tools/demo.py:48",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 49,
+      "cite": "tools/demo.py:49",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.draft.compile",
+      "kind": "python-import",
+      "line": 57,
+      "cite": "tools/demo.py:57",
+      "to": "engine/draft/compile.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.draft.registry",
+      "kind": "python-import",
+      "line": 58,
+      "cite": "tools/demo.py:58",
+      "to": "engine/draft/registry.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.loop.calibrate",
+      "kind": "python-import",
+      "line": 59,
+      "cite": "tools/demo.py:59",
+      "to": "engine/loop/calibrate.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.radar.config",
+      "kind": "python-import",
+      "line": 60,
+      "cite": "tools/demo.py:60",
+      "to": "engine/radar/config.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.radar.ledger",
+      "kind": "python-import",
+      "line": 61,
+      "cite": "tools/demo.py:61",
+      "to": "engine/radar/ledger.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.radar.pipeline",
+      "kind": "python-import",
+      "line": 62,
+      "cite": "tools/demo.py:62",
+      "to": "engine/radar/pipeline.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.radar.report",
+      "kind": "python-import",
+      "line": 63,
+      "cite": "tools/demo.py:63",
+      "to": "engine/radar/report.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "engine.radar.state",
+      "kind": "python-import",
+      "line": 64,
+      "cite": "tools/demo.py:64",
+      "to": "engine/radar/state.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "tools.ats_check",
+      "kind": "python-import",
+      "line": 65,
+      "cite": "tools/demo.py:65",
+      "to": "tools/ats_check.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/demo.py",
+      "specifier": "tools.verify_pdf",
+      "kind": "python-import",
+      "line": 66,
+      "cite": "tools/demo.py:66",
+      "to": "tools/verify_pdf.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 20,
+      "cite": "tools/doctor.py:20",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "importlib",
+      "kind": "python-import",
+      "line": 21,
+      "cite": "tools/doctor.py:21",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "shutil",
+      "kind": "python-import",
+      "line": 22,
+      "cite": "tools/doctor.py:22",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "subprocess",
+      "kind": "python-import",
+      "line": 23,
+      "cite": "tools/doctor.py:23",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 24,
+      "cite": "tools/doctor.py:24",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "dataclasses",
+      "kind": "python-import",
+      "line": 25,
+      "cite": "tools/doctor.py:25",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 26,
+      "cite": "tools/doctor.py:26",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "engine.loop.tracker_schema",
+      "kind": "python-import",
+      "line": 34,
+      "cite": "tools/doctor.py:34",
+      "to": "engine/loop/tracker_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "engine.profile_schema",
+      "kind": "python-import",
+      "line": 35,
+      "cite": "tools/doctor.py:35",
+      "to": "engine/profile_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "engine.radar.config",
+      "kind": "python-import",
+      "line": 36,
+      "cite": "tools/doctor.py:36",
+      "to": "engine/radar/config.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/doctor.py",
+      "specifier": "engine.radar.ledger",
+      "kind": "python-import",
+      "line": 37,
+      "cite": "tools/doctor.py:37",
+      "to": "engine/radar/ledger.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/privacy_guard.py",
+      "specifier": "re",
+      "kind": "python-import",
+      "line": 5,
+      "cite": "tools/privacy_guard.py:5",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/privacy_guard.py",
+      "specifier": "subprocess",
+      "kind": "python-import",
+      "line": 6,
+      "cite": "tools/privacy_guard.py:6",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/privacy_guard.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 7,
+      "cite": "tools/privacy_guard.py:7",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/privacy_guard.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 8,
+      "cite": "tools/privacy_guard.py:8",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 14,
+      "cite": "tools/tracker_cli.py:14",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "difflib",
+      "kind": "python-import",
+      "line": 15,
+      "cite": "tools/tracker_cli.py:15",
+      "to": null,
+      "external": true,
+      "builtin": false
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "os",
+      "kind": "python-import",
+      "line": 16,
+      "cite": "tools/tracker_cli.py:16",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 17,
+      "cite": "tools/tracker_cli.py:17",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "tempfile",
+      "kind": "python-import",
+      "line": 18,
+      "cite": "tools/tracker_cli.py:18",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "datetime",
+      "kind": "python-import",
+      "line": 19,
+      "cite": "tools/tracker_cli.py:19",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "pathlib",
+      "kind": "python-import",
+      "line": 20,
+      "cite": "tools/tracker_cli.py:20",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "engine.loop.followup",
+      "kind": "python-import",
+      "line": 28,
+      "cite": "tools/tracker_cli.py:28",
+      "to": "engine/loop/followup.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "engine.loop.tracker_edit",
+      "kind": "python-import",
+      "line": 29,
+      "cite": "tools/tracker_cli.py:29",
+      "to": "engine/loop/tracker_edit.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "engine.loop.tracker_schema",
+      "kind": "python-import",
+      "line": 30,
+      "cite": "tools/tracker_cli.py:30",
+      "to": "engine/loop/tracker_schema.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/tracker_cli.py",
+      "specifier": "engine.radar.config",
+      "kind": "python-import",
+      "line": 31,
+      "cite": "tools/tracker_cli.py:31",
+      "to": "engine/radar/config.py",
+      "external": false,
+      "builtin": false
+    },
+    {
+      "from": "tools/verify_pdf.py",
+      "specifier": "argparse",
+      "kind": "python-import",
+      "line": 11,
+      "cite": "tools/verify_pdf.py:11",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/verify_pdf.py",
+      "specifier": "sys",
+      "kind": "python-import",
+      "line": 12,
+      "cite": "tools/verify_pdf.py:12",
+      "to": null,
+      "external": true,
+      "builtin": true
+    },
+    {
+      "from": "tools/verify_pdf.py",
+      "specifier": "pypdf",
+      "kind": "python-import",
+      "line": 19,
+      "cite": "tools/verify_pdf.py:19",
+      "to": null,
+      "external": true,
+      "builtin": false
+    },
+    {
+      "from": "tools/verify_pdf.py",
+      "specifier": "pypdf",
+      "kind": "python-import",
+      "line": 26,
+      "cite": "tools/verify_pdf.py:26",
+      "to": null,
+      "external": true,
+      "builtin": false
+    }
+  ],
+  "manifests": [
+    {
+      "path": "requirements.txt",
+      "kind": "requirements.txt",
+      "deps": [
+        "pypdf",
+        "python-jobspy",
+        "pyyaml"
+      ],
+      "devDeps": [],
+      "scripts": [],
+      "declaresNothing": false,
+      "cite": "requirements.txt:1"
+    }
+  ],
+  "env": [],
+  "routes": [],
+  "clients": [],
+  "hosts": [],
+  "schedules": [],
+  "observability": [],
+  "authChecks": [],
+  "writes": [
+    {
+      "call": "write_text",
+      "target": "path",
+      "path": "engine/loop/archive.py",
+      "line": 228,
+      "cite": "engine/loop/archive.py:228",
+      "alsoWrites": 1,
+      "alsoAt": [
+        "engine/loop/archive.py:251"
+      ],
+      "targets": [
+        "path"
+      ]
+    },
+    {
+      "call": "write_text",
+      "target": "path",
+      "path": "engine/radar/report.py",
+      "line": 267,
+      "cite": "engine/radar/report.py:267",
+      "alsoWrites": 0,
+      "alsoAt": [],
+      "targets": [
+        "path"
+      ]
+    },
+    {
+      "call": "write_text",
+      "target": "path",
+      "path": "engine/radar/state.py",
+      "line": 47,
+      "cite": "engine/radar/state.py:47",
+      "alsoWrites": 0,
+      "alsoAt": [],
+      "targets": [
+        "path"
+      ]
+    },
+    {
+      "call": "write_text",
+      "target": "args.out",
+      "path": "tools/calibrate.py",
+      "line": 83,
+      "cite": "tools/calibrate.py:83",
+      "alsoWrites": 0,
+      "alsoAt": [],
+      "targets": [
+        "args.out"
+      ]
+    },
+    {
+      "call": "write_text",
+      "target": "jd_path",
+      "path": "tools/demo.py",
+      "line": 244,
+      "cite": "tools/demo.py:244",
+      "alsoWrites": 2,
+      "alsoAt": [
+        "tools/demo.py:249",
+        "tools/demo.py:276"
+      ],
+      "targets": [
+        "jd_path",
+        "ats_path",
+        "calibration_path"
+      ]
+    }
+  ],
+  "shells": [
+    {
+      "call": "run",
+      "target": "git",
+      "path": "tools/privacy_guard.py",
+      "line": 71,
+      "cite": "tools/privacy_guard.py:71"
+    }
+  ],
+  "testFiles": [
+    "tests/__init__.py",
+    "tests/fixtures.py",
+    "tests/fixtures_demo_rows.py",
+    "tests/fixtures_season.py",
+    "tests/fixtures_tracker.py",
+    "tests/fixtures_typst.py",
+    "tests/test_archive.py",
+    "tests/test_ats_check.py",
+    "tests/test_calibrate.py",
+    "tests/test_cli.py",
+    "tests/test_cli_judge.py",
+    "tests/test_comp_rules.py",
+    "tests/test_compile.py",
+    "tests/test_config.py",
+    "tests/test_demo.py",
+    "tests/test_doctor.py",
+    "tests/test_drafting_e2e.py",
+    "tests/test_entrypoint.py",
+    "tests/test_fingerprint.py",
+    "tests/test_followup.py",
+    "tests/test_hybrid_override.py",
+    "tests/test_ledger.py",
+    "tests/test_location.py",
+    "tests/test_location_rules.py",
+    "tests/test_loop_docs.py",
+    "tests/test_loop_e2e.py",
+    "tests/test_onsite_rule.py",
+    "tests/test_pipeline.py",
+    "tests/test_pipeline_ledger.py",
+    "tests/test_privacy_guard.py",
+    "tests/test_profile_example.py",
+    "tests/test_readme_claims.py",
+    "tests/test_registry.py",
+    "tests/test_report.py",
+    "tests/test_report_row64.py",
+    "tests/test_row64_replay.py",
+    "tests/test_rules_engine.py",
+    "tests/test_scoring.py",
+    "tests/test_scrape.py",
+    "tests/test_seniority_rule.py",
+    "tests/test_setup_doc.py",
+    "tests/test_setup_md.py",
+    "tests/test_state.py",
+    "tests/test_templates.py",
+    "tests/test_tracker.py",
+    "tests/test_tracker_mutations.py",
+    "tests/test_tracker_schema.py",
+    "tests/test_verify_pdf.py"
+  ],
+  "gaps": [
+    {
+      "tier": "NOTED",
+      "code": "DYNAMIC_IMPORT_MODULE",
+      "path": "tools/doctor.py",
+      "line": 76,
+      "detail": "importlib.import_module is called with a computed name, so the edge it creates cannot be read from the text",
+      "cite": "tools/doctor.py:76"
+    }
+  ],
+  "counts": {
+    "modules": 32,
+    "edges": 138,
+    "manifests": 1,
+    "env": 0,
+    "routes": 0,
+    "clients": 0,
+    "hosts": 0,
+    "schedules": 0,
+    "observability": 0,
+    "authChecks": 0,
+    "writes": 5,
+    "shells": 1,
+    "testFiles": 48,
+    "gaps": 1,
+    "blockingGaps": 0
+  },
+  "generated_at": "2026-09-28T01:14:56.183Z"
+}
