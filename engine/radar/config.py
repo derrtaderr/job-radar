@@ -59,6 +59,10 @@ class Config:
     followup_after_days: int
     archive_dir: Path
     exclusions: list
+    # The warm path's personal data. Inside config/ by convention, like the
+    # decision ledger, and for the same reasons: it is judgment and state rather
+    # than a path preference, and it inherits config/'s gitignore for free.
+    network_dir: "Optional[Path]" = None
 
 
 def _require(data: dict, key: str, filename: str):
@@ -268,6 +272,7 @@ def load_config(config_dir: Path) -> Config:
     # user can mistype into a permanently silent no-op. Absent means nothing has
     # been judged yet, which is the honest day-one state.
     decisions_path = config_dir / "decisions.csv"
+    network_dir = config_dir / "network"
 
     tracker = settings_raw.get("tracker") or None
     tracker_path = (base / tracker).resolve() if tracker else None
@@ -305,4 +310,5 @@ def load_config(config_dir: Path) -> Config:
         followup_after_days=followup_after_days,
         archive_dir=archive_dir,
         exclusions=exclusions,
+        network_dir=network_dir,
     )
