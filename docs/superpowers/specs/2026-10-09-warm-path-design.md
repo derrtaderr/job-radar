@@ -199,7 +199,7 @@ a later `reply`.
 
 Lists, oldest first: warm asks at or past day 3 ("apply today, add the hiring-manager
 note"), recent-hire chats awaiting a reply, hiring-manager notes owed for applications
-already sent. The vault's `/daily` calls it, which is the reader that keeps this from
+already sent. The user's daily brief calls it, which is the reader that keeps this from
 depending on memory.
 
 ### 11. Calibration
