@@ -328,3 +328,22 @@ def test_run_reports_a_missing_jobspy_dependency_clearly(tmp_path, capsys, monke
     code = main(["--config", str(cfg_dir)])
     assert code != 0
     assert "scrape module not yet available" in capsys.readouterr().out
+
+
+def test_run_shows_the_path_from_config_network(tmp_path):
+    cfg_dir = _config(tmp_path)
+    rows = _rows("Cobalt Grid", "Quarry Systems")
+    assert main(["--config", str(cfg_dir)], scrape_fn=lambda cfg: rows) == 0
+    queue = next((tmp_path / "radar-out").iterdir()) / "queue.md"
+    text = queue.read_text()
+    assert "warm: Riley Example" in text   # from config.example/network/
+    assert "unresearched" in text
+
+
+def test_a_broken_network_warns_and_the_run_still_completes(tmp_path, capsys):
+    cfg_dir = _config(tmp_path)
+    (cfg_dir / "network").mkdir(exist_ok=True)
+    (cfg_dir / "network" / "connections.csv").write_text("not an export\n")
+    assert main(["--config", str(cfg_dir)],
+                scrape_fn=lambda cfg: _rows("Cobalt Grid")) == 0
+    assert "paths skipped" in capsys.readouterr().out
