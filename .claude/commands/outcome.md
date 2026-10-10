@@ -197,6 +197,13 @@ followups: 0
 - 2026-09-13: applied
 ```
 
+Then record the application in the touch log, so the warm-path gate and `due` know it went
+out (`due` uses it to say when a hiring-manager note is owed):
+
+```bash
+.venv/bin/python tools/network_cli.py touch --company "<Company>" --state applied
+```
+
 **A slug that already exists is refused, not overwritten:**
 
 ```

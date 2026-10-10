@@ -1,6 +1,6 @@
 ---
 name: Warm-path stage design
-status: draft, awaiting review
+status: approved 2026-10-09, amended at planning (see components 5, 6, 11)
 date: 2026-10-09
 read_by: superpowers:writing-plans (next step), then every lane implementing it; DESIGN.md gains a section pointing here once shipped
 ---
@@ -46,7 +46,7 @@ LinkedIn data export ─► config/network/connections.csv ─┐
                                                         ├─► resolve_paths()  (pure; no model, no network)
 /paths (session + Clay) ─► network_cli.py add ─► config/network/people/<company-slug>.yaml ─┘
                                                         │
-          queue.md + tracker "Drafted" rows show a PATH column (no score change)
+          queue.md shows a PATH column; `paths --tracker` prints drafted rows (no score change)
                                                         ▼
 /apply Step 0: network_cli.py gate <company> ── warm & not asked ─► STOP, offer /reach
                                                         │
@@ -126,17 +126,21 @@ Pure function. Returns every path for a posting's company, best first:
 
 `engine/radar/report.py` gains a `path` column on the queue, rendered from the best path
 plus a count of the rest (`warm: A. Rivera, connected 2019 (+1)`). Score is untouched.
-The tracker's "Drafted but not applied" section gains a `Path` column; `tracker_schema.py`
-already tolerates extra columns there, and the column is not added to `REQUIRED_COLUMNS`.
+The tracker is not edited: `network_cli.py paths --tracker` prints the same column for the
+"Drafted but not applied" rows (amended 2026-10-09 at planning: adding a column to a hand-kept
+tracker means editing its header and every row, and the printed table carries the same
+information).
 
 ### 6. `/paths` — session command, Clay lookup
 
-For the top N of today's queue (default 10, `settings.yaml: network.lookup_top_n`) plus
+For the top N of today's queue (default 10, passed as the command's argument) plus
 every tracker row in "Drafted but not applied", skipping companies with a fresh people file:
 query Clay for the likely hiring manager for the posting's function and for people in that
 function who started within ~180 days. Each result is written through
-`network_cli.py add`. The command ends by re-rendering the day's queue so the path column
-reflects the lookup. N caps credit spend; the command states credits used.
+`network_cli.py add`. The command ends by printing `network_cli.py paths` for the companies
+it looked up; the next radar run's queue carries the column (a same-day run appends to the
+queue by design, so there is no re-render). N caps credit spend; the command states credits
+used.
 
 ### 7. The ordering gate — `network_cli.py gate <company> [--posting <id>]`
 
@@ -205,10 +209,11 @@ the existing floors (`DEFAULT_MIN_N = 5` per side, `MIN_GAP_POINTS = 20`, noise 
 the existing named-suppression behavior:
 
 1. **Reply rates** by path, by hook level, and matched register versus control.
-2. **Referral versus interview rate.** `/apply` writes `path` and `referral_state` into
-   the archive's outcome frontmatter at archive time; a new `ContrastSpec`
-   (`key="referred"`) compares interview rate for referred versus not-referred
-   applications. This is the contrast that may eventually justify score points for paths,
+2. **Referral versus interview rate.** Referral state is read from `touches.csv` and
+   joined to closed applications by canonical company name (amended at planning: the
+   archive's frontmatter is a small fixed key set, and the touch log already holds the
+   fact). A `ContrastSpec` (`key="referred"`) compares interview rate for referred versus
+   not-referred applications. This is the contrast that may eventually justify score points for paths,
    and only through a printed proposal; calibration still never edits config.
 
 ## Error handling
