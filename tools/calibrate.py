@@ -49,6 +49,10 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--out", default=None,
         help="write the report to this file instead of printing it")
+    parser.add_argument(
+        "--paths", action="store_true",
+        help="append the path report: reply rates by path, hook and register, "
+             "and referral vs interview rate (reads config/network/touches.csv)")
     args = parser.parse_args(argv)
 
     if args.min_n < 1:
@@ -78,6 +82,20 @@ def main(argv=None) -> int:
 
     report = calibration_report(tracker_text, archive_dir, cfg,
                                 min_n=args.min_n)
+
+    if args.paths:
+        from engine.loop.calibrate_paths import paths_report
+        from engine.network.errors import NetworkError
+        from engine.network.network import load_network
+        from engine.network.touches import load_touches
+        try:
+            network = load_network(cfg.network_dir)
+            touches = load_touches(cfg.network_dir / "touches.csv")
+        except NetworkError as exc:
+            print(f"network error: {exc}", file=sys.stderr)
+            return 1
+        report += "\n" + paths_report(tracker_text, archive_dir, touches,
+                                      network.aliases, min_n=args.min_n)
 
     if args.out:
         Path(args.out).write_text(report)
