@@ -82,7 +82,7 @@ OK   privacy hook: core.hooksPath is .githooks
 OK   gitignore integrity: <repo>/.gitignore has all 6 required lines
 SKIP tracker: no tracker: configured in settings.yaml — nothing to check
 OK   decision ledger: <repo>/config/decisions.csv parses (1 decision recorded)
-OK   warm path: 2 connections (export <N> days old), 0 people files, 0 touches
+WARN warm path: connections.csv is still the fictional example copied from config.example, so every path it shows is invented
 ```
 
 Eleven checks, always all eleven. The doctor never stops at the first problem, because a
@@ -641,9 +641,11 @@ exactly; the whole file is unreadable without it.
 **`SKIP warm path: no <path> yet — the warm path is off`** → expected until you drop your
 LinkedIn `Connections.csv` export into `config/network/`. Everything else runs without it.
 
+**`WARN warm path: connections.csv is still the fictional example ...`** → expected right
+after `cp -r config.example config`. Replace `config/network/connections.csv` with your own
+export; until then every warm path in the queue is invented.
+
 **`OK   warm path: N connections (export D days old), P people files, T touches`** → clean.
-Right after `cp -r config.example config` this counts the example's two fictional connections.
-Replace `config/network/connections.csv` with your own export.
 
 **`WARN warm path: ... (export 75 days old) ...`** → the export is past 60 days, so the companies
 beside your connections' names may be out of date. Re-export from LinkedIn and replace the file.

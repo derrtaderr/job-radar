@@ -331,6 +331,12 @@ def _check_network(config, config_error: "str | None") -> CheckResult:
         return CheckResult(
             "warm path", "warn", "no connections.csv in the network directory",
             f"drop LinkedIn's Connections.csv export at {net_dir / 'connections.csv'}")
+    if "Fictional example" in (net_dir / "connections.csv").read_text(errors="replace"):
+        return CheckResult(
+            "warm path", "warn",
+            "connections.csv is still the fictional example copied from config.example, "
+            "so every path it shows is invented",
+            f"replace {net_dir / 'connections.csv'} with your own Connections.csv export")
     age = (datetime.date.today() - network.export_date).days
     detail = (f"{len(network.connections)} connections (export {age} days old), "
               f"{len(network.people)} people files, {len(touches)} touches")

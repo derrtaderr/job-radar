@@ -19,8 +19,10 @@ plus every company in the tracker's drafted section:
 .venv/bin/python tools/network_cli.py paths --tracker
 ```
 
-Skip any company whose path is neither `unresearched` nor marked `[stale]`. Say how many
-lookups that leaves before spending any Clay credits.
+Decide on the **Lookup** column, not the Path column: look up every company whose Lookup
+is `never` or `stale`, including companies that already show a warm path. A warm ask that times
+out falls back to the hiring-manager note, so the hiring manager has to be known either way.
+Say how many lookups that leaves before spending any Clay credits.
 
 ## Step 2 — Look each one up in Clay
 

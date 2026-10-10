@@ -515,8 +515,12 @@ def test_network_check_states(tmp_path):
     cfg_dir = tmp_path / "config"
     shutil.copytree(Path(__file__).parent.parent / "config.example", cfg_dir)
     cfg = load_config(cfg_dir)
-    # copytree keeps the checkout's mtime, which ages; pin it to now so the
-    # OK case cannot rot into the WARN case.
+    # A real-looking export: the shipped one is the fictional example, which
+    # the check deliberately WARNs on (test_network_review_fixes pins that).
+    (cfg_dir / "network" / "connections.csv").write_text(
+        "First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+        "Ana,Rivera,https://www.linkedin.com/in/example,,Harborlight,Eng,15 Jan 2019\n")
+    # pin the mtime to now so the OK case cannot rot into the WARN case.
     now = datetime.datetime.now().timestamp()
     os.utime(cfg_dir / "network" / "connections.csv", (now, now))
     assert _check_network(cfg, None).ok is True

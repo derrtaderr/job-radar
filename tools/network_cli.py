@@ -163,11 +163,19 @@ def cmd_paths(args, cfg, today) -> int:
         return 2
     if net.export_date:
         print(f"connections export dated {net.export_date.isoformat()}\n")
-    print("| Company | Path |")
-    print("|---|---|")
+    # The Lookup column is what /paths decides on, not the Path cell: a company
+    # with a warm connection still needs its hiring manager looked up, because
+    # a warm ask that times out falls back to the hiring-manager note.
+    print("| Company | Path | Lookup |")
+    print("|---|---|---|")
     for company in companies:
-        cell = render_path_cell(resolve_paths(company, net, today)).replace("|", "\\|")
-        print(f"| {company} | {cell} |")
+        report = resolve_paths(company, net, today)
+        cell = render_path_cell(report).replace("|", "\\|")
+        if report.looked_up is None:
+            lookup = "never"
+        else:
+            lookup = f"{'stale' if report.stale else 'fresh'} {report.looked_up.isoformat()}"
+        print(f"| {company} | {cell} | {lookup} |")
     return 0
 
 
