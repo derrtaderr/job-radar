@@ -30,8 +30,8 @@ cp -r config.example config
 # untouched; delete config/config.example to clean up the junk copy.
 
 .venv/bin/python tools/doctor.py
-# ten checks: python, venv, jobspy, typst, config, profile, the privacy hook,
-# .gitignore integrity, tracker, decision ledger. Read-only — every fix it
+# eleven checks: python, venv, jobspy, typst, config, profile, the privacy hook,
+# .gitignore integrity, tracker, decision ledger, warm path. Read-only — every fix it
 # prints is yours to run.
 
 # fill in config/ with YOUR profile and rules before the real run

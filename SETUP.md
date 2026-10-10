@@ -82,9 +82,10 @@ OK   privacy hook: core.hooksPath is .githooks
 OK   gitignore integrity: <repo>/.gitignore has all 6 required lines
 SKIP tracker: no tracker: configured in settings.yaml — nothing to check
 OK   decision ledger: <repo>/config/decisions.csv parses (1 decision recorded)
+OK   warm path: 2 connections (export <N> days old), 0 people files, 0 touches
 ```
 
-Ten checks, always all ten. The doctor never stops at the first problem, because a
+Eleven checks, always all eleven. The doctor never stops at the first problem, because a
 half-set-up machine usually has more than one, and finding them one run at a time is ten
 trips instead of one. It also never writes anything — including the git config it reads in
 check 7. Every fix it prints is a command you run.
@@ -636,6 +637,20 @@ would ever surface it. Fill in the id, or the company and title.
 (header must be: jid,company,title,verdict,reason,date,url)`** → the header line was edited or
 lost. Restore it
 exactly; the whole file is unreadable without it.
+
+**`SKIP warm path: no <path> yet — the warm path is off`** → expected until you drop your
+LinkedIn `Connections.csv` export into `config/network/`. Everything else runs without it.
+
+**`OK   warm path: N connections (export D days old), P people files, T touches`** → clean.
+Right after `cp -r config.example config` this counts the example's two fictional connections.
+Replace `config/network/connections.csv` with your own export.
+
+**`WARN warm path: ... (export 75 days old) ...`** → the export is past 60 days, so the companies
+beside your connections' names may be out of date. Re-export from LinkedIn and replace the file.
+
+**`FAIL warm path: <path>: line 3: state 'ghosted' is not one of ...`** → a touch row was
+hand-edited into a shape the ledger cannot read. Unlike the decision ledger, nothing in the file
+is read until it is fixed, because a skipped touch would silently vanish from the reply rates.
 
 **`radar: WARNING — <path>: ledger row 2: verdict 'maybe' is not one of kill, draft`** → the
 same finding, printed by a RUN rather than the doctor. The run continues with every row it can
