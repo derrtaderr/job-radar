@@ -90,4 +90,14 @@ def load_connections(path) -> tuple:
     if not p.exists():
         return [], None
     exported = datetime.date.fromtimestamp(p.stat().st_mtime)
-    return parse_connections(p.read_text(), where=str(p)), exported
+    try:
+        text = p.read_bytes().decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise NetworkError(
+            f"{p} is not UTF-8 ({exc.reason} at byte {exc.start}). LinkedIn exports "
+            "UTF-8; this usually means it was opened and re-saved in Excel. "
+            "Re-export it and copy it in without re-saving") from exc
+    try:
+        return parse_connections(text, where=str(p)), exported
+    except csv.Error as exc:
+        raise NetworkError(f"{p}: unreadable CSV ({exc}) — re-export it from LinkedIn") from exc

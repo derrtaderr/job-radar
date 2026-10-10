@@ -41,15 +41,18 @@ class PathReport:
 
 def resolve_paths(company, network, today: datetime.date) -> PathReport:
     warm, checks = [], []
+    company_key = canonical(company, network.aliases)
     for c in network.connections:
         grade = match(c.company, company, network.aliases)
+        if grade == "exact" and (company_key, slugify(c.name)) in network.left:
+            continue
         if grade == "exact":
             warm.append(ContactPath("warm", slugify(c.name), c.name, c.position,
                                     c.connected_on))
         elif grade == "partial":
             checks.append(f"{c.name} at {c.company}")
 
-    pf = network.people.get(canonical(company, network.aliases))
+    pf = network.people.get(company_key)
     clay = []
     if pf is not None:
         for p in pf.people:

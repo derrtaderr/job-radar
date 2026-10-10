@@ -16,10 +16,17 @@ from dataclasses import dataclass, replace
 
 from engine.network.company import canonical
 from engine.network.dates import add_business_days
-from engine.network.touches import CLOSED_STATES, latest_by_person
+from engine.network.touches import latest_by_person
 
 WARM_WAIT_BUSINESS_DAYS = 3
 NO_REPLY_AFTER_BUSINESS_DAYS = 10
+# An override or an application speaks for the posting it was made about. A
+# company keeps hiring, so after this long it no longer waves through a new
+# posting there: the person decides again, with the gate in front of them.
+DECISION_FRESH_DAYS = 90
+# A reply is not a referral. "Sure, send me your resume" still has to become
+# a submitted referral before the application, so a reply holds the gate.
+_GIVEN_UP_STATES = ("declined", "no_reply", "left_company")
 
 
 @dataclass(frozen=True)
@@ -48,10 +55,11 @@ def gate(report, touches, aliases, today: datetime.date) -> GateResult:
 
     key = canonical(company, aliases)
     mine = [t for t in touches if canonical(t.company, aliases) == key]
-    states = {t.state for t in mine}
-    if "override" in states:
+    recent = {t.state for t in mine
+              if (today - _iso(t.date)).days <= DECISION_FRESH_DAYS}
+    if "override" in recent:
         return GateResult(0, f"{company}: override recorded, proceed")
-    if "applied" in states:
+    if "applied" in recent:
         return GateResult(0, f"{company}: already applied")
 
     by_slug = {p.slug: p for p in warm}
@@ -71,11 +79,26 @@ def gate(report, touches, aliases, today: datetime.date) -> GateResult:
             "because a referral usually has to land before the application: "
             "run /reach. To apply anyway, record it first: "
             f'network_cli.py touch --company "{company}" --state override'))
-    closed = [t for t in warm_latest if t.state in CLOSED_STATES]
-    if closed and len(closed) == len(warm_latest):
+    given_up = [t for t in warm_latest if t.state in _GIVEN_UP_STATES]
+    if given_up and len(given_up) == len(warm_latest):
         return GateResult(0, f"{company}: every warm ask is closed "
-                             f"({', '.join(sorted({t.state for t in closed}))}). "
+                             f"({', '.join(sorted({t.state for t in given_up}))}). "
                              "Apply now and send the hiring-manager note")
+
+    replies = [t for t in warm_latest if t.state == "replied"]
+    if replies:
+        last_reply = max(replies, key=lambda t: t.date)
+        expiry = add_business_days(_iso(last_reply.date), WARM_WAIT_BUSINESS_DAYS)
+        name = by_slug[last_reply.person_slug].name
+        if today < expiry:
+            return GateResult(4, (
+                f"{company}: {name} replied on {last_reply.date}, but a reply is not "
+                "a referral. Wait for them to submit you, then record it with "
+                f"`reply --state referred`, or apply without them after "
+                f"{expiry.isoformat()}"))
+        return GateResult(0, f"{company}: {name} replied on {last_reply.date} but no "
+                             f"referral was confirmed by {expiry.isoformat()}. Apply "
+                             "now, tell them you did, and send the hiring-manager note")
 
     last = max(asks, key=lambda t: t.date)
     expiry = add_business_days(_iso(last.date), WARM_WAIT_BUSINESS_DAYS)
@@ -93,7 +116,12 @@ def due(touches, reports: dict, aliases, today: datetime.date) -> tuple:
     the caller's to append; this function writes nothing."""
     items, no_reply = [], []
     latest = latest_by_person(touches, aliases)
-    for (_, slug), t in latest.items():
+    decided = {}  # canonical company -> newest applied/override date
+    for t in touches:
+        if t.state in ("applied", "override"):
+            key = canonical(t.company, aliases)
+            decided[key] = max(decided.get(key, ""), t.date)
+    for (company_key, slug), t in latest.items():
         if t.state != "asked" or not slug:
             continue
         sent = _iso(t.date)
@@ -103,6 +131,8 @@ def due(touches, reports: dict, aliases, today: datetime.date) -> tuple:
             items.append(DueItem(t.date, t.company,
                                  f"{t.company}: no reply from {slug} in 10 business "
                                  "days, marked no_reply"))
+        elif t.path == "warm" and decided.get(company_key, "") >= t.date:
+            continue  # they already applied or overrode; "apply today" would be wrong
         elif t.path == "warm" and add_business_days(
                 sent, WARM_WAIT_BUSINESS_DAYS) <= today:
             items.append(DueItem(t.date, t.company,
