@@ -501,3 +501,33 @@ def test_a_bad_ledger_flips_the_exit_code(tmp_path, capsys):
         "j1,Northwind Analytics,Data Engineer,perhaps,unsure,2026-09-25,\n")
     assert doctor.main(["--config", str(cfg_dir)], repo_root=repo) == 1
     assert "decision ledger" in capsys.readouterr().out
+
+
+def test_network_check_states(tmp_path):
+    import datetime
+    import os
+    import shutil
+    from pathlib import Path
+
+    from engine.radar.config import load_config
+    from tools.doctor import _check_network
+
+    cfg_dir = tmp_path / "config"
+    shutil.copytree(Path(__file__).parent.parent / "config.example", cfg_dir)
+    cfg = load_config(cfg_dir)
+    # copytree keeps the checkout's mtime, which ages; pin it to now so the
+    # OK case cannot rot into the WARN case.
+    now = datetime.datetime.now().timestamp()
+    os.utime(cfg_dir / "network" / "connections.csv", (now, now))
+    assert _check_network(cfg, None).ok is True
+
+    old = (datetime.datetime.now() - datetime.timedelta(days=90)).timestamp()
+    os.utime(cfg_dir / "network" / "connections.csv", (old, old))
+    result = _check_network(cfg, None)
+    assert result.ok == "warn" and "re-export" in result.fix
+
+    (cfg_dir / "network" / "touches.csv").write_text("date,company\nx,y\n")
+    assert _check_network(cfg, None).ok is False
+
+    shutil.rmtree(cfg_dir / "network")
+    assert _check_network(cfg, None).ok == "skip"

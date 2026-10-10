@@ -18,6 +18,7 @@ config/ at all, so checks that need a loaded Config can't run).
 from __future__ import annotations
 
 import argparse
+import datetime
 import importlib
 import shutil
 import subprocess
@@ -299,13 +300,56 @@ def _check_decision_ledger(config, config_error: "str | None") -> CheckResult:
         f"{'' if len(decisions) == 1 else 's'} recorded)", "")
 
 
+EXPORT_WARN_DAYS = 60
+
+
+def _check_network(config, config_error: "str | None") -> CheckResult:
+    """Does config/network/ load, and is the LinkedIn export recent?
+
+    A stale export is a WARN, never a FAIL: the paths still work, they are
+    just describing where people worked when the file was made. No network
+    directory is a SKIP, because the warm path is optional.
+    """
+    from engine.network.errors import NetworkError
+    from engine.network.network import load_network
+    from engine.network.touches import load_touches
+
+    if config_error is not None:
+        return CheckResult("warm path", "skip",
+                           "config didn't load — see the 'config' check above", "")
+    net_dir = config.network_dir
+    if net_dir is None or not net_dir.is_dir():
+        return CheckResult("warm path", "skip",
+                           f"no {net_dir} yet — the warm path is off", "")
+    try:
+        network = load_network(net_dir)
+        touches = load_touches(net_dir / "touches.csv")
+    except NetworkError as exc:
+        return CheckResult("warm path", False, str(exc),
+                           "fix the file named above by hand")
+    if network.export_date is None:
+        return CheckResult(
+            "warm path", "warn", "no connections.csv in the network directory",
+            f"drop LinkedIn's Connections.csv export at {net_dir / 'connections.csv'}")
+    age = (datetime.date.today() - network.export_date).days
+    detail = (f"{len(network.connections)} connections (export {age} days old), "
+              f"{len(network.people)} people files, {len(touches)} touches")
+    if age > EXPORT_WARN_DAYS:
+        return CheckResult(
+            "warm path", "warn", detail,
+            "re-export Connections from LinkedIn (Settings → Data privacy → "
+            f"Get a copy of your data) and replace {net_dir / 'connections.csv'}")
+    return CheckResult("warm path", True, detail, "")
+
+
 # --- orchestration ------------------------------------------------------------
 
 def run_checks(repo_root, config_dir) -> list:
-    """Run all ten checks and return their CheckResults, in order. Every
+    """Run all eleven checks and return their CheckResults, in order. Every
     check runs independently — one failing never skips or hides another,
-    except checks 6 (profile), 9 (tracker) and 10 (decision ledger), which
-    SKIP (not FAIL) when there's no loadable Config to check yet."""
+    except checks 6 (profile), 9 (tracker), 10 (decision ledger) and 11
+    (warm path), which SKIP (not FAIL) when there's no loadable Config to
+    check yet."""
     repo_root = Path(repo_root)
     config_dir = Path(config_dir)
     config, config_error = _load_config_or_none(config_dir)
@@ -321,6 +365,7 @@ def run_checks(repo_root, config_dir) -> list:
         _check_gitignore(repo_root),
         _check_tracker(config, config_error),
         _check_decision_ledger(config, config_error),
+        _check_network(config, config_error),
     ]
 
 
