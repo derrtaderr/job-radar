@@ -22,6 +22,9 @@ from __future__ import annotations
 import argparse
 import datetime
 
+from engine.network.errors import NetworkError
+from engine.network.network import load_network
+from engine.network.paths import render_path_cell, resolve_paths
 from engine.radar.config import ConfigError, load_config
 from engine.radar.ledger import (
     VERDICTS,
@@ -247,6 +250,21 @@ def _check(cfg, fetch_fn) -> int:
     return 0
 
 
+def _attach_paths(survivors, cfg, today) -> None:
+    """Stamp each survivor with who the person can reach there. Never touches
+    the score: a connection changes the order of steps, not whether a posting
+    is worth pursuing. A broken network file warns and leaves the column
+    empty; it must not cost the person the rest of their queue."""
+    try:
+        network = load_network(cfg.network_dir)
+    except NetworkError as exc:
+        print(f"radar: WARNING — paths skipped: {exc}")
+        return
+    for row in survivors:
+        row["path"] = render_path_cell(
+            resolve_paths(row.get("company"), network, today))
+
+
 def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
     """Returns a process exit code. 0 is a real, completed run."""
     argv = list(argv or [])
@@ -309,6 +327,7 @@ def main(argv=None, scrape_fn=None, fetch_fn=None) -> int:
     survivors, killed, new_state = pipeline(
         raw_rows, state, cfg, _tracker_set(cfg, today), today,
         decisions=load_ledger(cfg.decisions_path))
+    _attach_paths(survivors, cfg, today)
 
     _, queue_path, jd_dir = day_paths(cfg.output_dir, today)
     jds = write_jds(jd_dir, survivors, killed, str(today))

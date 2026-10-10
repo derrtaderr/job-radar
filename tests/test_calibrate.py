@@ -534,13 +534,15 @@ def test_cli_never_writes_into_the_config_dir(tmp_path, capsys):
     from tools.calibrate import main
     from tests.fixtures_season import build_season
     season = build_season(tmp_path)
-    before = {p.name: p.read_bytes() for p in season.config_dir.iterdir()}
+    before = {str(p.relative_to(season.config_dir)): p.read_bytes()
+              for p in season.config_dir.rglob("*") if p.is_file()}
 
     main([str(season.tracker_path),
           "--archive", str(season.archive_dir),
           "--config", str(season.config_dir)])
 
-    after = {p.name: p.read_bytes() for p in season.config_dir.iterdir()}
+    after = {str(p.relative_to(season.config_dir)): p.read_bytes()
+              for p in season.config_dir.rglob("*") if p.is_file()}
     assert before == after
 
 

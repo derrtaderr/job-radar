@@ -271,3 +271,18 @@ def test_write_report_creates_nothing_when_there_is_nothing_to_write(tmp_path):
     path = tmp_path / DAY / "queue.md"
     assert write_report(path, [], [], DAY) is False
     assert not path.exists()
+
+
+def test_queue_has_a_path_column_after_prior():
+    from engine.radar.report import render_report
+    out = render_report([make_report_row(path="warm: Ana Rivera, connected 2019")],
+                        [], "2026-10-12")
+    assert "| Prior | Path | Flags |" in out
+    assert "| warm: Ana Rivera, connected 2019 |" in out
+
+
+def test_a_row_without_a_path_renders_an_empty_cell():
+    from engine.radar.report import render_report
+    out = render_report([make_report_row()], [], "2026-10-12")
+    row = [line for line in out.splitlines() if "Northwind Analytics" in line][0]
+    assert row.count("|") == 12  # 11 columns

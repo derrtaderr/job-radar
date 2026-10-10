@@ -140,7 +140,8 @@ def _flag_names(r: dict) -> list:
 def _render_survivor_row(r: dict) -> str:
     return (f"| {r['score']} | {_esc(r['title'])} | {_esc(r['company'])} | {_comp(r)} "
             f"| {r.get('date_posted') or ''} | {_esc(r.get('location') or '')} "
-            f"| {_prior_cell(r)} | {_esc('; '.join(_flag_names(r)))} "
+            f"| {_prior_cell(r)} | {_esc(r.get('path') or '')} "
+            f"| {_esc('; '.join(_flag_names(r)))} "
             f"| {_jd_link(r)} | {r.get('job_url') or ''} |")
 
 
@@ -186,8 +187,8 @@ def _render_body(survivors, killed) -> str:
         # Leading blank line: markdown needs one before a table, or the
         # paragraph above swallows it and the queue renders as a wall of pipes.
         "",
-        "| Score | Role | Company | Comp | Posted | Where | Prior | Flags | JD | Link |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Score | Role | Company | Comp | Posted | Where | Prior | Path | Flags | JD | Link |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in sorted(survivors, key=lambda r: -r["score"]):
         lines.append(_render_survivor_row(r))

@@ -1,0 +1,5 @@
+# Canonical company name -> other names it appears under, on postings or in
+# your LinkedIn export. Only needed when normalisation (case, punctuation,
+# Inc/LLC suffixes) is not enough. Fictional example.
+Harborlight:
+  - Harborlight Holdings
