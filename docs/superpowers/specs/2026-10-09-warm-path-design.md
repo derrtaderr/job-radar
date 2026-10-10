@@ -32,7 +32,7 @@ still never enter version control, because the repo is headed public and the pri
 would refuse the commit regardless.
 
 **In:** connections-export join, Clay lookup of hiring manager and recent hires, a path
-flag on the queue and tracker, an ordering gate at the top of `/apply`, outreach drafting
+flag on the queue (printed for drafted tracker rows), an ordering gate at the top of `/apply`, outreach drafting
 (`/reach`), a touch ledger, due-item surfacing, calibration contrasts on replies and on
 referral versus interview rate.
 
