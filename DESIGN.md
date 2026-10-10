@@ -45,6 +45,14 @@ against that archived copy. Quiet applications resurface past a threshold. Once 
 resolved, `tools/calibrate.py` joins the closed rows to their archives and proposes
 adjustments to the rules that produced them.
 
+**Warm path** (`engine/network/`, `tools/network_cli.py`, `/paths`, `/reach`) finds a person
+at each posting's company and puts the steps in the right order: a referral usually has to land
+before the application, so `/apply` stops when the person knows someone there and has not asked.
+It never changes a score. A connection says nothing about whether a posting is worth pursuing;
+it changes what happens once one is chosen. Outreach is drafted, never sent, and every send and
+reply is logged so `tools/calibrate.py --paths` can report which path types get answers, under
+the same floors as every other contrast. Design: `docs/superpowers/specs/2026-10-09-warm-path-design.md`.
+
 Calibration is what makes the three stages a loop rather than a pipeline: the judgment in
 `config/` produces applications, the applications produce outcomes, and the outcomes are
 read back against the judgment. Every step of that return path stops at a proposal.
